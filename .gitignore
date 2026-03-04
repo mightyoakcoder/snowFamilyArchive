@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.env
+*.json.key
+service-account*.json
+.DS_Store
+.vscode/
+.claude/
+scripts/
+.dockerignore
+package-lock.json
