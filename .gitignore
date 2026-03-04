@@ -8,4 +8,3 @@ service-account*.json
 .claude/
 scripts/
 .dockerignore
-package-lock.json
