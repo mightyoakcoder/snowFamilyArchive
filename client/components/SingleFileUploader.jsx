@@ -1,5 +1,4 @@
 import React, { useState, useRef, useEffect } from "react";
-import { Link } from "react-router-dom";
 import api from "../api.js";
 
 // ─── Field name mapping (backend uses image_date / people / description) ───
@@ -322,6 +321,36 @@ const STYLES = `
 
   .sfu-empty { font-family: 'DM Mono', monospace; font-size: 0.73rem; color: var(--dim); padding: 1.5rem 0; text-align: center; letter-spacing: 0.06em; }
   .sfu-hidden { display: none; }
+
+  /* Privacy toggle */
+  .sfu-privacy-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0.65rem 0.875rem; background: var(--surface2);
+    border: 1px solid var(--border2); border-radius: 8px; cursor: pointer;
+    transition: border-color 0.15s;
+  }
+  .sfu-privacy-row:hover { border-color: var(--accent); }
+  .sfu-privacy-row.private { border-color: rgba(251,191,36,0.4); background: rgba(251,191,36,0.05); }
+  .sfu-privacy-left { display: flex; align-items: center; gap: 0.6rem; }
+  .sfu-privacy-icon { color: var(--dim); flex-shrink: 0; }
+  .sfu-privacy-row.private .sfu-privacy-icon { color: var(--warn); }
+  .sfu-privacy-text { font-size: 0.85rem; font-weight: 500; color: var(--text2); }
+  .sfu-privacy-row.private .sfu-privacy-text { color: var(--warn); }
+  .sfu-privacy-sub { font-family: 'DM Mono', monospace; font-size: 0.68rem; color: var(--dim); margin-top: 1px; }
+  .sfu-toggle { position: relative; width: 36px; height: 20px; flex-shrink: 0; }
+  .sfu-toggle input { opacity: 0; width: 0; height: 0; position: absolute; }
+  .sfu-toggle-track {
+    position: absolute; inset: 0; background: var(--border2); border-radius: 99px;
+    transition: background 0.2s;
+  }
+  .sfu-toggle input:checked + .sfu-toggle-track { background: var(--warn); }
+  .sfu-toggle-thumb {
+    position: absolute; top: 3px; left: 3px;
+    width: 14px; height: 14px; background: #fff; border-radius: 50%;
+    transition: transform 0.2s; pointer-events: none;
+  }
+  .sfu-toggle input:checked ~ .sfu-toggle-thumb { transform: translateX(16px); }
+  .sfu-lock-badge { color: var(--warn); opacity: 0.8; flex-shrink: 0; display: flex; align-items: center; }
 `;
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -431,16 +460,53 @@ function PeopleInput({ value, onChange, corpus }) {
   );
 }
 
+// ── Privacy toggle ─────────────────────────────────────────────────────────
+function PrivacyToggle({ value, onChange }) {
+  return (
+    <div
+      className={`sfu-privacy-row${value ? " private" : ""}`}
+      onClick={() => onChange(!value)}
+    >
+      <div className="sfu-privacy-left">
+        <span className="sfu-privacy-icon">
+          {value ? (
+            <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
+              <rect x="3" y="6.5" width="9" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.3"/>
+              <path d="M5 6.5V4.5a2.5 2.5 0 0 1 5 0v2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+            </svg>
+          ) : (
+            <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
+              <rect x="3" y="6.5" width="9" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.3"/>
+              <path d="M5 6.5V4.5a2.5 2.5 0 0 1 5 0" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+              <path d="M10 6.5V5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+            </svg>
+          )}
+        </span>
+        <div>
+          <div className="sfu-privacy-text">{value ? "Private — family only" : "Public — visible to everyone"}</div>
+          <div className="sfu-privacy-sub">{value ? "Only logged-in users can see this" : "Anyone visiting the site can see this"}</div>
+        </div>
+      </div>
+      <label className="sfu-toggle" onClick={e => e.stopPropagation()}>
+        <input type="checkbox" checked={value} onChange={e => onChange(e.target.checked)} />
+        <span className="sfu-toggle-track" />
+        <span className="sfu-toggle-thumb" />
+      </label>
+    </div>
+  );
+}
+
 // ── Edit Modal ─────────────────────────────────────────────────────────────
 // Sends three separate PATCH requests (one per changed field) to match
 // the backend's { field, value } contract
 function EditModal({ file, corpus, onSave, onClose }) {
   // image_date is stored as a string like "2024-03-15" or null
-  const [date,   setDate]   = useState(file.image_date || "");
+  const [date,      setDate]      = useState(file.image_date || "");
   // description maps to our "notes" concept
-  const [desc,   setDesc]   = useState(file.description || "");
+  const [desc,      setDesc]      = useState(file.description || "");
   // people is an array in Firestore, tag UI works on array
-  const [people, setPeople] = useState(file.people || []);
+  const [people,    setPeople]    = useState(file.people || []);
+  const [isPrivate, setIsPrivate] = useState(file.is_private ?? false);
 
   return (
     <div className="sfu-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
@@ -469,6 +535,10 @@ function EditModal({ file, corpus, onSave, onClose }) {
               onChange={e => setDesc(e.target.value)}
             />
           </div>
+          <div className="sfu-field">
+            <label className="sfu-label">Visibility</label>
+            <PrivacyToggle value={isPrivate} onChange={setIsPrivate} />
+          </div>
         </div>
         <div className="sfu-modal-actions">
           <button className="sfu-btn-secondary" onClick={onClose}>Cancel</button>
@@ -478,6 +548,7 @@ function EditModal({ file, corpus, onSave, onClose }) {
               image_date:  date,
               people:      people,
               description: desc,
+              is_private:  isPrivate,
             })}
           >
             Save changes
@@ -505,13 +576,28 @@ export default function SingleFileUploader() {
   const [uploadDate,   setUploadDate]   = useState("");   // → image_date
   const [uploadDesc,   setUploadDesc]   = useState("");   // → description
   const [uploadPeople, setUploadPeople] = useState([]);   // → people (comma string)
+  const [isPrivate,    setIsPrivate]    = useState(false);// → is_private
 
+  const [currentUser,   setCurrentUser]   = useState(undefined); // undefined = loading
   const [search,        setSearch]        = useState("");
-  const [expanded,      setExpanded]      = useState(null);   // doc id
+  const [expanded,      setExpanded]      = useState(null);
   const [editingFile,   setEditingFile]   = useState(null);
-  const [confirmDelete, setConfirmDelete] = useState(null);   // doc id
+  const [confirmDelete, setConfirmDelete] = useState(null);
 
-  useEffect(() => { loadFiles(); }, []);
+  // Listen for Firebase auth state changes
+  useEffect(() => {
+    // Import getAuth lazily to avoid hard dep if firebase isn't configured
+    import("firebase/auth").then(({ getAuth, onAuthStateChanged }) => {
+      const auth = getAuth();
+      const unsub = onAuthStateChanged(auth, user => setCurrentUser(user ?? null));
+      return unsub;
+    }).catch(() => setCurrentUser(null));
+  }, []);
+
+  useEffect(() => {
+    if (currentUser !== undefined) loadFiles();
+  }, [currentUser]);
+
   useEffect(() => () => clearInterval(progressTimer.current), []);
 
   const corpus = buildCorpus(files);
@@ -538,6 +624,7 @@ export default function SingleFileUploader() {
     formData.append("image_date",  uploadDate);
     formData.append("people",      peopleArrayToString(uploadPeople));
     formData.append("description", uploadDesc);
+    formData.append("is_private",  String(isPrivate));
 
     try {
       setUploading(true);
@@ -573,7 +660,7 @@ export default function SingleFileUploader() {
 
       setMessage({ type: "success", text: "Upload successful" });
       setSelectedFile(null); setPreview(null);
-      setUploadDate(""); setUploadDesc(""); setUploadPeople([]);
+      setUploadDate(""); setUploadDesc(""); setUploadPeople([]); setIsPrivate(false);
       loadFiles();
     } catch (err) {
       clearInterval(progressTimer.current);
@@ -588,19 +675,21 @@ export default function SingleFileUploader() {
   // ── Load files ───────────────────────────────────────────────────────────
   async function loadFiles() {
     try {
-      const res = await api.get("/api/files");
+      // Logged-in users get all files (including private); guests get public only
+      const endpoint = currentUser ? "/api/files" : "/api/public/files";
+      const res = await api.get(endpoint);
       setFiles(res.data.files || []);
     } catch {}
   }
 
   // ── Save edits ───────────────────────────────────────────────────────────
-  // Backend PATCH expects: { field: 'image_date'|'people'|'description', value: string }
-  // People value must be a comma-separated string per app.py's parsing logic
+  // Backend PATCH expects: { field: 'image_date'|'people'|'description'|'is_private', value }
   async function saveEdit(fileId, patch) {
     const updates = [
       { field: "image_date",  value: patch.image_date  || "" },
       { field: "people",      value: peopleArrayToString(patch.people) },
       { field: "description", value: patch.description || "" },
+      { field: "is_private",  value: String(patch.is_private ?? false) },
     ];
 
     try {
@@ -614,7 +703,7 @@ export default function SingleFileUploader() {
     // Update local state immediately for instant UI feedback
     setFiles(prev => prev.map(f =>
       f.id === fileId
-        ? { ...f, image_date: patch.image_date, people: patch.people, description: patch.description }
+        ? { ...f, image_date: patch.image_date, people: patch.people, description: patch.description, is_private: patch.is_private }
         : f
     ));
     setEditingFile(null);
@@ -661,12 +750,7 @@ export default function SingleFileUploader() {
           <div className="sfu-header">
             <div className="sfu-eyebrow">File Transfer</div>
             <h1 className="sfu-title">Upload a File</h1>
-            <p className="sfu-subtitle">Drag, drop, or select a file to get started.{" "}
-              <span>
-                Looking to upload multiple files at once? {" "}
-                <Link to="/upload-multi">Click Here</Link>
-              </span>
-            </p>
+            <p className="sfu-subtitle">Drag, drop, or select a file to get started. <span>Looking to upload multiple files at once? <a href="">Click Here</a></span></p>
           </div>
 
           <div className="sfu-card">
@@ -741,6 +825,10 @@ export default function SingleFileUploader() {
                     value={uploadDesc}
                     onChange={e => setUploadDesc(e.target.value)}
                   />
+                </div>
+                <div className="sfu-field">
+                  <label className="sfu-label">Visibility</label>
+                  <PrivacyToggle value={isPrivate} onChange={setIsPrivate} />
                 </div>
               </div>
 
@@ -817,6 +905,14 @@ export default function SingleFileUploader() {
                     </div>
 
                     <div className="sfu-record-actions">
+                      {file.is_private && (
+                        <span className="sfu-lock-badge" title="Private — family only">
+                          <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+                            <rect x="2.5" y="5.5" width="8" height="6" rx="1.3" stroke="currentColor" strokeWidth="1.2"/>
+                            <path d="M4.5 5.5V3.8a2 2 0 0 1 4 0v1.7" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+                          </svg>
+                        </span>
+                      )}
                       <button
                         className="sfu-icon-btn edit"
                         title="Edit"

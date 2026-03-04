@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import api from "../api.js";
 
 const STYLES = `
@@ -466,6 +467,49 @@ const STYLES = `
     .gal-lb-image-wrap { min-height: 200px; }
     .gal-list-desc { display: none; }
   }
+
+  /* ── Privacy lock badge on cards ── */
+  .gal-lock {
+    position: absolute; top: 0.5rem; right: 0.5rem;
+    width: 26px; height: 26px; border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    backdrop-filter: blur(6px);
+  }
+  .gal-lock.private  { background: rgba(251,191,36,0.18); color: var(--warn); border: 1px solid rgba(251,191,36,0.3); }
+  .gal-lock.public   { background: rgba(74,222,152,0.12); color: var(--success); border: 1px solid rgba(74,222,152,0.25); }
+  .gal-list-lock { display: flex; align-items: center; flex-shrink: 0; }
+  .gal-list-lock.private { color: var(--warn); }
+  .gal-list-lock.public  { color: var(--success); opacity: 0.7; }
+
+  /* ── Privacy toggle in modal ── */
+  .gal-privacy-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0.65rem 0.875rem; background: var(--bg);
+    border: 1px solid var(--border2); border-radius: 8px; cursor: pointer;
+    transition: border-color 0.15s;
+  }
+  .gal-privacy-row:hover { border-color: var(--accent); }
+  .gal-privacy-row.private { border-color: rgba(251,191,36,0.4); background: rgba(251,191,36,0.04); }
+  .gal-privacy-left { display: flex; align-items: center; gap: 0.6rem; }
+  .gal-privacy-icon { color: var(--dim); flex-shrink: 0; }
+  .gal-privacy-row.private .gal-privacy-icon { color: var(--warn); }
+  .gal-privacy-text { font-size: 0.85rem; font-weight: 500; color: var(--text2); }
+  .gal-privacy-row.private .gal-privacy-text { color: var(--warn); }
+  .gal-privacy-sub { font-family: 'DM Mono', monospace; font-size: 0.68rem; color: var(--dim); margin-top: 1px; }
+  .gal-toggle { position: relative; width: 36px; height: 20px; flex-shrink: 0; }
+  .gal-toggle input { opacity: 0; width: 0; height: 0; position: absolute; }
+  .gal-toggle-track { position: absolute; inset: 0; background: var(--border2); border-radius: 99px; transition: background 0.2s; }
+  .gal-toggle input:checked + .gal-toggle-track { background: var(--warn); }
+  .gal-toggle-thumb { position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; background: #fff; border-radius: 50%; transition: transform 0.2s; pointer-events: none; }
+  .gal-toggle input:checked ~ .gal-toggle-thumb { transform: translateX(16px); }
+
+  /* ── Privacy field in lightbox info panel ── */
+  .gal-lb-privacy {
+    display: flex; align-items: center; gap: 0.5rem;
+    font-size: 0.78rem; font-family: 'DM Mono', monospace;
+  }
+  .gal-lb-privacy.private { color: var(--warn); }
+  .gal-lb-privacy.public  { color: var(--success); opacity: 0.8; }
 `;
 
 const IMAGE_TYPES = new Set(["image/jpeg","image/jpg","image/png","image/gif","image/webp"]);
@@ -575,16 +619,51 @@ function PeopleInput({ value, onChange, corpus }) {
   );
 }
 
+import { Lock, LockOpen } from "lucide-react";
+
+// ── Lock icon helper ────────────────────────────────────────────────────────
+function LockIcon({ open = false, size = 13 }) {
+  return open
+    ? <LockOpen size={size} strokeWidth={3.5} />
+    : <Lock     size={size} strokeWidth={3} />;
+}
+
+// ── Privacy toggle ─────────────────────────────────────────────────────────
+function PrivacyToggle({ value, onChange }) {
+  return (
+    <div
+      className={`gal-privacy-row${value ? " private" : ""}`}
+      onClick={() => onChange(!value)}
+    >
+      <div className="gal-privacy-left">
+        <span className="gal-privacy-icon">
+          <LockIcon open={!value} size={15} />
+        </span>
+        <div>
+          <div className="gal-privacy-text">{value ? "Private — family only" : "Public — visible to everyone"}</div>
+          <div className="gal-privacy-sub">{value ? "Only logged-in users can see this" : "Anyone visiting the site can see this"}</div>
+        </div>
+      </div>
+      <label className="gal-toggle" onClick={e => e.stopPropagation()}>
+        <input type="checkbox" checked={value} onChange={e => onChange(e.target.checked)} />
+        <span className="gal-toggle-track" />
+        <span className="gal-toggle-thumb" />
+      </label>
+    </div>
+  );
+}
+
 // ── Edit Modal ─────────────────────────────────────────────────────────────
 function EditModal({ file, corpus, onSave, onClose }) {
-  const [date,    setDate]    = useState(file.image_date  || "");
-  const [desc,    setDesc]    = useState(file.description || "");
-  const [people,  setPeople]  = useState(file.people      || []);
-  const [saving,  setSaving]  = useState(false);
+  const [date,      setDate]      = useState(file.image_date  || "");
+  const [desc,      setDesc]      = useState(file.description || "");
+  const [people,    setPeople]    = useState(file.people      || []);
+  const [isPrivate, setIsPrivate] = useState(file.is_private  ?? false);
+  const [saving,    setSaving]    = useState(false);
 
   async function handleSave() {
     setSaving(true);
-    await onSave({ image_date: date, description: desc, people });
+    await onSave({ image_date: date, description: desc, people, is_private: isPrivate });
     setSaving(false);
   }
 
@@ -614,6 +693,10 @@ function EditModal({ file, corpus, onSave, onClose }) {
               value={desc}
               onChange={e => setDesc(e.target.value)}
             />
+          </div>
+          <div className="gal-modal-field">
+            <label className="gal-modal-label">Visibility</label>
+            <PrivacyToggle value={isPrivate} onChange={setIsPrivate} />
           </div>
         </div>
         <div className="gal-modal-actions">
@@ -768,6 +851,14 @@ function Lightbox({ files, index, onClose, onNav, onEdit, onDelete }) {
               <span className="gal-lb-key">Type</span>
               <span className="gal-lb-val">{file.content_type || "—"}</span>
             </div>
+
+            <div className="gal-lb-field">
+              <span className="gal-lb-key">Visibility</span>
+              <span className={`gal-lb-privacy ${file.is_private ? "private" : "public"}`}>
+                <LockIcon open={!file.is_private} size={11} />
+                &nbsp;{file.is_private ? "Private" : "Public"}
+              </span>
+            </div>
           </div>
 
           <div className="gal-lb-counter">
@@ -813,8 +904,6 @@ function Lightbox({ files, index, onClose, onNav, onEdit, onDelete }) {
 
 // ── Main component ─────────────────────────────────────────────────────────
 export default function ImageGallery() {
-  const [files,       setFiles]       = useState([]);
-  const [loading,     setLoading]     = useState(true);
   const [view,        setView]        = useState("grid");
   const [search,      setSearch]      = useState("");
   const [showFilters, setShowFilters] = useState(false);
@@ -823,43 +912,51 @@ export default function ImageGallery() {
   const [filterDateTo,   setFilterDateTo]   = useState("");
   const [lightboxIdx,    setLightboxIdx]     = useState(null);
   const [editingFile,    setEditingFile]     = useState(null);
+  const [currentUser,    setCurrentUser]     = useState(undefined);
 
-  const hasFilters = filterPerson || filterDateFrom || filterDateTo;
-  const corpus = buildCorpus(files);
+  const queryClient = useQueryClient();
+  const queryKey = ["files", currentUser ? "authed" : "public"];
 
-  useEffect(() => { loadFiles(); }, []);
+  useEffect(() => {
+    import("firebase/auth").then(({ getAuth, onAuthStateChanged }) => {
+      const auth = getAuth();
+      const unsub = onAuthStateChanged(auth, user => setCurrentUser(user ?? null));
+      return unsub;
+    }).catch(() => setCurrentUser(null));
+  }, []);
 
-  async function loadFiles() {
-    setLoading(true);
-    try {
-      const res = await api.get("/api/files");
-      const sorted = (res.data.files || []).sort((a, b) => {
+  const { data: files = [], isLoading: loading } = useQuery({
+    queryKey,
+    queryFn: async () => {
+      const endpoint = currentUser ? "/api/files" : "/api/public/files";
+      const res = await api.get(endpoint);
+      return (res.data.files || []).sort((a, b) => {
         const ta = a.uploaded_at?._seconds || 0;
         const tb = b.uploaded_at?._seconds || 0;
         return tb - ta;
       });
-      setFiles(sorted);
-    } catch (err) {
-      console.error("Failed to load files:", err);
-    } finally {
-      setLoading(false);
-    }
-  }
+    },
+    enabled: currentUser !== undefined,
+    staleTime: 5 * 60 * 1000,
+  });
 
-  // PATCH /api/files/:id — three separate requests, one per field
+  const hasFilters = filterPerson || filterDateFrom || filterDateTo;
+  const corpus = buildCorpus(files);
+
+  // PATCH /api/files/:id — one request per field including is_private
   async function saveEdit(fileId, patch) {
     const updates = [
       { field: "image_date",  value: patch.image_date  || "" },
       { field: "people",      value: peopleArrayToString(patch.people) },
       { field: "description", value: patch.description || "" },
+      { field: "is_private",  value: String(patch.is_private ?? false) },
     ];
     await Promise.all(updates.map(u =>
       api.patch(`/api/files/${fileId}`, u).catch(() => {})
     ));
-    // Update local state immediately — no reload needed
-    setFiles(prev => prev.map(f =>
-      f.id === fileId ? { ...f, ...patch } : f
-    ));
+    queryClient.setQueryData(queryKey, prev =>
+      (prev || []).map(f => f.id === fileId ? { ...f, ...patch } : f)
+    );
     setEditingFile(null);
   }
 
@@ -870,14 +967,14 @@ export default function ImageGallery() {
     } catch (err) {
       console.error("Delete failed:", err);
     }
-    setFiles(prev => prev.filter(f => f.id !== fileId));
+    const remaining = files.filter(f => f.id !== fileId);
+    queryClient.setQueryData(queryKey, remaining);
     // If we just deleted the last item close the lightbox,
     // otherwise clamp the index so we don't go out of bounds
     setLightboxIdx(prev => {
       if (prev === null) return null;
-      const remaining = files.filter(f => f.id !== fileId).length;
-      if (remaining === 0) return null;
-      return Math.min(prev, remaining - 1);
+      if (remaining.length === 0) return null;
+      return Math.min(prev, remaining.length - 1);
     });
   }
   const filtered = files.filter(f => {
@@ -1058,6 +1155,10 @@ export default function ImageGallery() {
                       <FileIcon size={28} />
                     </div>
                   )}
+                  {/* Lock badge — shown on all cards, locked=private, unlocked=public */}
+                  <div className={`gal-lock ${file.is_private ? "private" : "public"}`} title={file.is_private ? "Private" : "Public"}>
+                    <LockIcon open={!file.is_private} size={12} />
+                  </div>
                   <div className="gal-card-body">
                     {file.description && (
                       <div className="gal-card-desc">{file.description}</div>
@@ -1112,6 +1213,9 @@ export default function ImageGallery() {
                       )}
                     </div>
                   </div>
+                  <span className={`gal-list-lock ${file.is_private ? "private" : "public"}`} title={file.is_private ? "Private" : "Public"}>
+                    <LockIcon open={!file.is_private} size={14} />
+                  </span>
                 </div>
               ))}
             </div>
