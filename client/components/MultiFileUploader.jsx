@@ -1,5 +1,4 @@
 import React, { useState, useRef, useEffect } from "react";
-import { Link } from "react-router-dom";
 import api from "../api.js";
 
 // ─── Field name mapping (backend uses image_date / people / description) ───
@@ -38,7 +37,7 @@ const STYLES = `
 
   .sfu-inner {
     width: 100%;
-    max-width: 560px;
+    max-width: 620px;
     opacity: 0;
     transform: translateY(14px);
     animation: sfuFadeIn 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
@@ -98,11 +97,23 @@ const STYLES = `
   .sfu-drop-label { font-size: 0.95rem; font-weight: 500; color: var(--text); margin-bottom: 0.25rem; }
   .sfu-drop-sub { font-size: 0.78rem; color: var(--dim); font-family: 'DM Mono', monospace; }
 
-  .sfu-file-info {
-    margin-top: 1rem; background: var(--surface2); border: 1px solid var(--border2);
-    border-radius: 10px; padding: 0.75rem 0.875rem;
-    display: flex; align-items: center; gap: 0.75rem; animation: sfuSlideIn 0.2s ease;
+  /* ── Per-file cards ───────────────────────────────────────────────────── */
+  .sfu-file-list { margin-top: 1.25rem; display: flex; flex-direction: column; gap: 1rem; }
+
+  .sfu-file-card {
+    background: var(--surface2); border: 1px solid var(--border2);
+    border-radius: 12px; overflow: hidden; animation: sfuSlideIn 0.2s ease;
   }
+
+  .sfu-file-card-header {
+    display: flex; align-items: center; gap: 0.75rem;
+    padding: 0.75rem 0.875rem;
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.15s;
+  }
+  .sfu-file-card-header:hover { background: rgba(123,140,255,0.04); }
+
   .sfu-file-badge {
     background: rgba(123,140,255,0.15); color: var(--accent2);
     border: 1px solid rgba(123,140,255,0.25); font-family: 'DM Mono', monospace;
@@ -111,16 +122,37 @@ const STYLES = `
   }
   .sfu-file-name { font-size: 0.85rem; font-weight: 500; color: var(--text); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .sfu-file-size { font-family: 'DM Mono', monospace; font-size: 0.72rem; color: var(--dim); flex-shrink: 0; }
+
+  .sfu-file-status {
+    font-family: 'DM Mono', monospace; font-size: 0.68rem; letter-spacing: 0.05em;
+    padding: 2px 8px; border-radius: 99px; flex-shrink: 0;
+  }
+  .sfu-file-status.pending  { color: var(--dim);     background: rgba(86,92,120,0.15);  border: 1px solid rgba(86,92,120,0.25); }
+  .sfu-file-status.uploading{ color: var(--accent2); background: rgba(123,140,255,0.12); border: 1px solid rgba(123,140,255,0.25); }
+  .sfu-file-status.done     { color: var(--success);  background: rgba(74,222,152,0.1);  border: 1px solid rgba(74,222,152,0.25); }
+  .sfu-file-status.error    { color: var(--error);    background: rgba(240,112,112,0.1); border: 1px solid rgba(240,112,112,0.25); }
+
+  .sfu-chevron {
+    color: var(--dim); flex-shrink: 0; transition: transform 0.2s;
+  }
+  .sfu-chevron.open { transform: rotate(180deg); }
+
   .sfu-file-remove {
     background: none; border: none; cursor: pointer; color: var(--dim);
-    padding: 0; line-height: 1; transition: color 0.15s; flex-shrink: 0; display: flex; align-items: center;
+    padding: 0.2rem; line-height: 1; transition: color 0.15s; flex-shrink: 0; display: flex; align-items: center;
+    border-radius: 4px;
   }
   .sfu-file-remove:hover { color: var(--error); }
 
-  .sfu-preview { margin-top: 1rem; border-radius: 10px; overflow: hidden; border: 1px solid var(--border2); }
-  .sfu-preview img { width: 100%; max-height: 160px; object-fit: cover; display: block; }
+  .sfu-file-card-body {
+    border-top: 1px solid var(--border);
+    padding: 1rem 0.875rem 1rem;
+  }
 
-  .sfu-fields { margin-top: 1.25rem; display: flex; flex-direction: column; gap: 0.875rem; }
+  .sfu-preview { margin-bottom: 1rem; border-radius: 8px; overflow: hidden; border: 1px solid var(--border2); }
+  .sfu-preview img { width: 100%; max-height: 130px; object-fit: cover; display: block; }
+
+  .sfu-fields { display: flex; flex-direction: column; gap: 0.75rem; }
   .sfu-field { display: flex; flex-direction: column; gap: 0.35rem; }
   .sfu-label {
     font-family: 'DM Mono', monospace; font-size: 10px;
@@ -136,7 +168,7 @@ const STYLES = `
     border-color: var(--accent); box-shadow: 0 0 0 3px rgba(123,140,255,0.12);
   }
   .sfu-input::placeholder, .sfu-textarea::placeholder { color: var(--dim); }
-  .sfu-textarea { resize: vertical; min-height: 80px; line-height: 1.5; }
+  .sfu-textarea { resize: vertical; min-height: 70px; line-height: 1.5; }
   .sfu-input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.5); cursor: pointer; }
 
   /* People tag input */
@@ -178,24 +210,37 @@ const STYLES = `
   .sfu-suggestion:hover, .sfu-suggestion.focused { background: rgba(123,140,255,0.1); color: var(--text); }
   .sfu-suggestion mark { background: none; color: var(--accent2); font-weight: 600; }
 
+  /* Apply-to-all bar */
+  .sfu-apply-bar {
+    margin-top: 1.25rem; padding: 0.875rem 1rem;
+    background: rgba(123,140,255,0.06); border: 1px solid rgba(123,140,255,0.18);
+    border-radius: 10px; display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;
+  }
+  .sfu-apply-label { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent2); flex-shrink: 0; }
+  .sfu-apply-btn {
+    padding: 0.35rem 0.8rem; border: 1px solid rgba(123,140,255,0.3); border-radius: 7px;
+    background: rgba(123,140,255,0.1); color: var(--accent2); font-family: 'Barlow', sans-serif;
+    font-size: 0.78rem; font-weight: 500; cursor: pointer; transition: background 0.15s, border-color 0.15s;
+    white-space: nowrap;
+  }
+  .sfu-apply-btn:hover { background: rgba(123,140,255,0.18); border-color: rgba(123,140,255,0.5); }
+
+  /* Progress */
   .sfu-progress-wrap { margin-top: 1.25rem; }
   .sfu-progress-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
   .sfu-progress-label { font-family: 'DM Mono', monospace; font-size: 0.68rem; letter-spacing: 0.12em; color: var(--dim); text-transform: uppercase; }
-  .sfu-progress-pct { font-family: 'DM Mono', monospace; font-size: 0.68rem; color: var(--accent); transition: all 0.2s ease; }
+  .sfu-progress-pct { font-family: 'DM Mono', monospace; font-size: 0.68rem; color: var(--accent); }
   .sfu-progress-track { height: 4px; background: var(--border2); border-radius: 99px; overflow: hidden; }
   .sfu-progress-bar {
     height: 100%;
     background: linear-gradient(90deg, var(--accent), var(--accent2));
     border-radius: 99px;
     transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-    position: relative;
-    overflow: hidden;
+    position: relative; overflow: hidden;
   }
-  /* shimmer sweep while uploading */
   .sfu-progress-bar::after {
     content: '';
-    position: absolute;
-    inset: 0;
+    position: absolute; inset: 0;
     background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.25) 50%, transparent 100%);
     animation: sfuShimmer 1.2s ease-in-out infinite;
   }
@@ -337,12 +382,10 @@ function getFileExt(name) {
   return name?.split(".").pop()?.toUpperCase() || "FILE";
 }
 
-// People are stored as an array in Firestore; the PATCH API expects a comma-separated string
 function peopleArrayToString(arr) {
   return (arr || []).join(", ");
 }
 
-// Build autocomplete corpus from all people across all records
 function buildCorpus(files) {
   const set = new Set();
   files.forEach(f => (f.people || []).forEach(p => set.add(p)));
@@ -432,14 +475,9 @@ function PeopleInput({ value, onChange, corpus }) {
 }
 
 // ── Edit Modal ─────────────────────────────────────────────────────────────
-// Sends three separate PATCH requests (one per changed field) to match
-// the backend's { field, value } contract
 function EditModal({ file, corpus, onSave, onClose }) {
-  // image_date is stored as a string like "2024-03-15" or null
   const [date,   setDate]   = useState(file.image_date || "");
-  // description maps to our "notes" concept
   const [desc,   setDesc]   = useState(file.description || "");
-  // people is an array in Firestore, tag UI works on array
   const [people, setPeople] = useState(file.people || []);
 
   return (
@@ -449,12 +487,7 @@ function EditModal({ file, corpus, onSave, onClose }) {
         <div className="sfu-fields">
           <div className="sfu-field">
             <label className="sfu-label">Date</label>
-            <input
-              className="sfu-input"
-              type="date"
-              value={date}
-              onChange={e => setDate(e.target.value)}
-            />
+            <input className="sfu-input" type="date" value={date} onChange={e => setDate(e.target.value)} />
           </div>
           <div className="sfu-field">
             <label className="sfu-label">People</label>
@@ -462,23 +495,14 @@ function EditModal({ file, corpus, onSave, onClose }) {
           </div>
           <div className="sfu-field">
             <label className="sfu-label">Description</label>
-            <textarea
-              className="sfu-textarea"
-              placeholder="Additional information…"
-              value={desc}
-              onChange={e => setDesc(e.target.value)}
-            />
+            <textarea className="sfu-textarea" placeholder="Additional information…" value={desc} onChange={e => setDesc(e.target.value)} />
           </div>
         </div>
         <div className="sfu-modal-actions">
           <button className="sfu-btn-secondary" onClick={onClose}>Cancel</button>
           <button
             className="sfu-btn-primary"
-            onClick={() => onSave({
-              image_date:  date,
-              people:      people,
-              description: desc,
-            })}
+            onClick={() => onSave({ image_date: date, people, description: desc })}
           >
             Save changes
           </button>
@@ -488,101 +512,255 @@ function EditModal({ file, corpus, onSave, onClose }) {
   );
 }
 
-// ── Main component ─────────────────────────────────────────────────────────
-export default function SingleFileUploader() {
-  const fileInputRef = useRef();
+// ── File metadata card ─────────────────────────────────────────────────────
+// Renders the collapsible per-file card in the pending queue
+function FileMetaCard({ entry, corpus, onChange, onRemove, disabled }) {
+  const [open, setOpen] = useState(true);
 
-  const [selectedFile, setSelectedFile] = useState(null);
-  const [preview,      setPreview]      = useState(null);
-  const [progress,     setProgress]     = useState(0);
+  return (
+    <div className="sfu-file-card">
+      {/* Header row — click to collapse / expand */}
+      <div className="sfu-file-card-header" onClick={() => setOpen(o => !o)}>
+        <span className="sfu-file-badge">{getFileExt(entry.file.name)}</span>
+        <span className="sfu-file-name">{entry.file.name}</span>
+        <span className="sfu-file-size">{formatFileSize(entry.file.size)}</span>
+
+        {/* Status pill */}
+        <span className={`sfu-file-status ${entry.status}`}>
+          {entry.status === "pending"   && "pending"}
+          {entry.status === "uploading" && `${entry.progress}%`}
+          {entry.status === "done"      && "done"}
+          {entry.status === "error"     && "error"}
+        </span>
+
+        {/* Chevron */}
+        <svg className={`sfu-chevron${open ? " open" : ""}`} width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <path d="M3 5l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+
+        {/* Remove button — stop propagation so it doesn't toggle collapse */}
+        {entry.status !== "uploading" && (
+          <button
+            className="sfu-file-remove"
+            onClick={e => { e.stopPropagation(); onRemove(); }}
+            title="Remove"
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <path d="M2 2l10 10M12 2L2 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+            </svg>
+          </button>
+        )}
+      </div>
+
+      {/* Collapsible body */}
+      {open && (
+        <div className="sfu-file-card-body">
+          {/* Image preview */}
+          {entry.preview && (
+            <div className="sfu-preview">
+              <img src={entry.preview} alt="Preview" />
+            </div>
+          )}
+
+          {/* Per-file progress bar */}
+          {entry.status === "uploading" && (
+            <div className="sfu-progress-wrap" style={{ marginBottom: "0.875rem", marginTop: 0 }}>
+              <div className="sfu-progress-track">
+                <div className="sfu-progress-bar" style={{ width: `${entry.progress}%` }} />
+              </div>
+            </div>
+          )}
+
+          {/* Metadata fields */}
+          <div className="sfu-fields">
+            <div className="sfu-field">
+              <label className="sfu-label">Date</label>
+              <input
+                className="sfu-input"
+                type="date"
+                value={entry.date}
+                disabled={disabled}
+                onChange={e => onChange({ date: e.target.value })}
+              />
+            </div>
+            <div className="sfu-field">
+              <label className="sfu-label">People</label>
+              <PeopleInput
+                value={entry.people}
+                onChange={people => onChange({ people })}
+                corpus={corpus}
+              />
+            </div>
+            <div className="sfu-field">
+              <label className="sfu-label">Description</label>
+              <textarea
+                className="sfu-textarea"
+                placeholder="Additional information…"
+                value={entry.desc}
+                disabled={disabled}
+                onChange={e => onChange({ desc: e.target.value })}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Unique ID helper ───────────────────────────────────────────────────────
+let _uid = 0;
+function uid() { return ++_uid; }
+
+// ── Main component ─────────────────────────────────────────────────────────
+export default function MultiFileUploader() {
+  const fileInputRef   = useRef();
+  const progressTimers = useRef({});  // uid → interval id
+
+  // Queue of { id, file, preview, date, people, desc, status, progress, error }
+  const [queue,        setQueue]        = useState([]);
   const [uploading,    setUploading]    = useState(false);
-  const progressTimer  = useRef(null);
+  const [overallProg,  setOverallProg]  = useState(0);
   const [dragActive,   setDragActive]   = useState(false);
   const [message,      setMessage]      = useState(null);
+
+  // Shared-apply fields
+  const [sharedDate,   setSharedDate]   = useState("");
+  const [sharedPeople, setSharedPeople] = useState([]);
+  const [sharedDesc,   setSharedDesc]   = useState("");
+
+  // Uploaded files list
   const [files,        setFiles]        = useState([]);
-
-  // Upload form metadata — field names match what the backend reads from FormData
-  const [uploadDate,   setUploadDate]   = useState("");   // → image_date
-  const [uploadDesc,   setUploadDesc]   = useState("");   // → description
-  const [uploadPeople, setUploadPeople] = useState([]);   // → people (comma string)
-
-  const [search,        setSearch]        = useState("");
-  const [expanded,      setExpanded]      = useState(null);   // doc id
-  const [editingFile,   setEditingFile]   = useState(null);
-  const [confirmDelete, setConfirmDelete] = useState(null);   // doc id
+  const [search,       setSearch]       = useState("");
+  const [expanded,     setExpanded]     = useState(null);
+  const [editingFile,  setEditingFile]  = useState(null);
+  const [confirmDelete,setConfirmDelete]= useState(null);
 
   useEffect(() => { loadFiles(); }, []);
-  useEffect(() => () => clearInterval(progressTimer.current), []);
+  useEffect(() => () => Object.values(progressTimers.current).forEach(clearInterval), []);
 
   const corpus = buildCorpus(files);
 
-  function handleFile(file) {
-    if (!file) return;
-    setSelectedFile(file); setMessage(null); setProgress(0);
-    setPreview(file.type.startsWith("image/") ? URL.createObjectURL(file) : null);
+  // ── Add files to queue ───────────────────────────────────────────────────
+  function addFiles(fileList) {
+    const newEntries = Array.from(fileList).map(file => ({
+      id:       uid(),
+      file,
+      preview:  file.type.startsWith("image/") ? URL.createObjectURL(file) : null,
+      date:     "",
+      people:   [],
+      desc:     "",
+      status:   "pending",   // pending | uploading | done | error
+      progress: 0,
+      error:    null,
+    }));
+    setQueue(q => [...q, ...newEntries]);
+    setMessage(null);
   }
 
   function handleDrop(e) {
     e.preventDefault(); setDragActive(false);
-    handleFile(e.dataTransfer.files[0]);
+    if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files);
   }
 
-  // ── Upload ───────────────────────────────────────────────────────────────
-  // Phase 1 (0→90%): real axios upload progress via onUploadProgress
-  // Phase 2 (90→99%): slow tick while server writes to GCS — completes on response
-  async function uploadFile() {
-    if (!selectedFile) return;
+  function removeFromQueue(id) {
+    setQueue(q => {
+      const entry = q.find(e => e.id === id);
+      if (entry?.preview) URL.revokeObjectURL(entry.preview);
+      return q.filter(e => e.id !== id);
+    });
+  }
 
-    const formData = new FormData();
-    formData.append("file",        selectedFile);
-    formData.append("image_date",  uploadDate);
-    formData.append("people",      peopleArrayToString(uploadPeople));
-    formData.append("description", uploadDesc);
+  function updateEntry(id, patch) {
+    setQueue(q => q.map(e => e.id === id ? { ...e, ...patch } : e));
+  }
 
-    try {
-      setUploading(true);
-      setProgress(0);
+  // ── Apply shared metadata to all pending entries ─────────────────────────
+  function applySharedToAll() {
+    setQueue(q => q.map(e => {
+      if (e.status !== "pending") return e;
+      return {
+        ...e,
+        date:   sharedDate   || e.date,
+        people: sharedPeople.length ? sharedPeople : e.people,
+        desc:   sharedDesc   || e.desc,
+      };
+    }));
+  }
 
-      await api.post("/api/upload", formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-        onUploadProgress: e => {
-          if (!e.total) return;
-          // Scale real upload progress to 0–90% so the bar never
-          // stalls at 100% while the server is still writing to GCS
-          const uploadPct = Math.round((e.loaded / e.total) * 90);
-          setProgress(uploadPct);
+  // ── Upload all pending files sequentially ────────────────────────────────
+  async function uploadAll() {
+    const pending = queue.filter(e => e.status === "pending");
+    if (!pending.length) return;
 
-          // Once bytes are fully sent, start a slow creep toward 99%
-          // so the bar keeps moving while we wait for the server response
-          if (e.loaded >= e.total) {
-            clearInterval(progressTimer.current);
-            progressTimer.current = setInterval(() => {
-              setProgress(p => {
-                if (p >= 99) { clearInterval(progressTimer.current); return 99; }
-                // Ease toward 99 — steps get smaller as we approach
-                return p + Math.max(1, Math.round((99 - p) / 8));
-              });
-            }, 200);
-          }
-        },
-      });
+    setUploading(true);
+    setMessage(null);
+    let doneCount = 0;
 
-      // Server responded — snap to 100% and clear the creep timer
-      clearInterval(progressTimer.current);
-      setProgress(100);
+    for (const entry of pending) {
+      updateEntry(entry.id, { status: "uploading", progress: 0 });
 
-      setMessage({ type: "success", text: "Upload successful" });
-      setSelectedFile(null); setPreview(null);
-      setUploadDate(""); setUploadDesc(""); setUploadPeople([]);
-      loadFiles();
-    } catch (err) {
-      clearInterval(progressTimer.current);
-      setMessage({ type: "error", text: err.response?.data?.error || err.message });
-    } finally {
-      setUploading(false);
-      // Small delay before resetting so user sees the full bar briefly
-      setTimeout(() => setProgress(0), 600);
+      const formData = new FormData();
+      formData.append("file",        entry.file);
+      formData.append("image_date",  entry.date);
+      formData.append("people",      peopleArrayToString(entry.people));
+      formData.append("description", entry.desc);
+
+      try {
+        await api.post("/api/upload", formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+          onUploadProgress: e => {
+            if (!e.total) return;
+            const pct = Math.round((e.loaded / e.total) * 90);
+            updateEntry(entry.id, { progress: pct });
+
+            if (e.loaded >= e.total) {
+              clearInterval(progressTimers.current[entry.id]);
+              progressTimers.current[entry.id] = setInterval(() => {
+                setQueue(q => q.map(en => {
+                  if (en.id !== entry.id) return en;
+                  const next = en.progress + Math.max(1, Math.round((99 - en.progress) / 8));
+                  if (next >= 99) { clearInterval(progressTimers.current[entry.id]); return { ...en, progress: 99 }; }
+                  return { ...en, progress: next };
+                }));
+              }, 200);
+            }
+          },
+        });
+
+        clearInterval(progressTimers.current[entry.id]);
+        updateEntry(entry.id, { status: "done", progress: 100 });
+        doneCount++;
+
+        // Overall progress
+        setOverallProg(Math.round((doneCount / pending.length) * 100));
+
+      } catch (err) {
+        clearInterval(progressTimers.current[entry.id]);
+        updateEntry(entry.id, {
+          status: "error",
+          error: err.response?.data?.error || err.message,
+        });
+      }
     }
+
+    setUploading(false);
+    setOverallProg(0);
+
+    const errors = queue.filter(e => e.status === "error").length +
+      pending.filter(e => e.status === "error").length;
+
+    if (doneCount === pending.length) {
+      setMessage({ type: "success", text: `${doneCount} file${doneCount !== 1 ? "s" : ""} uploaded successfully` });
+      // Clear done entries after a short delay
+      setTimeout(() => {
+        setQueue(q => q.filter(e => e.status !== "done"));
+      }, 1500);
+    } else {
+      setMessage({ type: "error", text: `${doneCount} uploaded, ${pending.length - doneCount} failed` });
+    }
+
+    loadFiles();
   }
 
   // ── Load files ───────────────────────────────────────────────────────────
@@ -594,24 +772,15 @@ export default function SingleFileUploader() {
   }
 
   // ── Save edits ───────────────────────────────────────────────────────────
-  // Backend PATCH expects: { field: 'image_date'|'people'|'description', value: string }
-  // People value must be a comma-separated string per app.py's parsing logic
   async function saveEdit(fileId, patch) {
     const updates = [
       { field: "image_date",  value: patch.image_date  || "" },
       { field: "people",      value: peopleArrayToString(patch.people) },
       { field: "description", value: patch.description || "" },
     ];
-
     try {
-      await Promise.all(
-        updates.map(u =>
-          api.patch(`/api/files/${fileId}`, u).catch(() => {})
-        )
-      );
+      await Promise.all(updates.map(u => api.patch(`/api/files/${fileId}`, u).catch(() => {})));
     } catch {}
-
-    // Update local state immediately for instant UI feedback
     setFiles(prev => prev.map(f =>
       f.id === fileId
         ? { ...f, image_date: patch.image_date, people: patch.people, description: patch.description }
@@ -622,16 +791,13 @@ export default function SingleFileUploader() {
 
   // ── Delete ───────────────────────────────────────────────────────────────
   async function deleteFile(fileId) {
-    try {
-      await api.delete(`/api/files/${fileId}`);
-    } catch {}
+    try { await api.delete(`/api/files/${fileId}`); } catch {}
     setFiles(prev => prev.filter(f => f.id !== fileId));
     setConfirmDelete(null);
     if (expanded === fileId) setExpanded(null);
   }
 
   // ── Filter ───────────────────────────────────────────────────────────────
-  // Searches filename, people (partial match), and description
   const filteredFiles = files.filter(f => {
     if (!search.trim()) return true;
     const q = search.toLowerCase();
@@ -641,6 +807,8 @@ export default function SingleFileUploader() {
       f.description?.toLowerCase().includes(q)
     );
   });
+
+  const pendingCount = queue.filter(e => e.status === "pending").length;
 
   return (
     <>
@@ -660,13 +828,8 @@ export default function SingleFileUploader() {
 
           <div className="sfu-header">
             <div className="sfu-eyebrow">File Transfer</div>
-            <h1 className="sfu-title">Upload a File</h1>
-            <p className="sfu-subtitle">Drag, drop, or select a file to get started.{" "}
-              <span>
-                Looking to upload multiple files at once? {" "}
-                <Link to="/upload-multi">Click Here</Link>
-              </span>
-            </p>
+            <h1 className="sfu-title">Upload Files</h1>
+            <p className="sfu-subtitle">Add one or more files — fill in metadata for each, then upload all at once</p>
           </div>
 
           <div className="sfu-card">
@@ -685,79 +848,76 @@ export default function SingleFileUploader() {
                   <path d="M26 34V20M26 20L20 26M26 20L32 26" stroke="#7b8cff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                   <path d="M18 36h16" stroke="#7b8cff" strokeWidth="1.5" strokeLinecap="round" opacity="0.4"/>
                 </svg>
-                <div className="sfu-drop-label">{dragActive ? "Release to drop" : "Drop your file here"}</div>
-                <div className="sfu-drop-sub">or click to browse</div>
+                <div className="sfu-drop-label">{dragActive ? "Release to drop" : "Drop your files here"}</div>
+                <div className="sfu-drop-sub">or click to browse — multiple files supported</div>
               </div>
 
               <input
                 type="file"
                 ref={fileInputRef}
                 className="sfu-hidden"
-                onChange={e => handleFile(e.target.files[0])}
+                multiple
+                onChange={e => { if (e.target.files.length) addFiles(e.target.files); e.target.value = ""; }}
               />
 
-              {selectedFile && (
-                <div className="sfu-file-info">
-                  <span className="sfu-file-badge">{getFileExt(selectedFile.name)}</span>
-                  <span className="sfu-file-name">{selectedFile.name}</span>
-                  <span className="sfu-file-size">{formatFileSize(selectedFile.size)}</span>
-                  <button
-                    className="sfu-file-remove"
-                    onClick={() => { setSelectedFile(null); setPreview(null); setMessage(null); }}
-                  >
-                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                      <path d="M2 2l10 10M12 2L2 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-                    </svg>
-                  </button>
-                </div>
+              {/* File queue */}
+              {queue.length > 0 && (
+                <>
+                  {/* Apply-to-all shared metadata bar */}
+                  {pendingCount > 1 && (
+                    <div className="sfu-apply-bar">
+                      <span className="sfu-apply-label">Apply to all</span>
+                      <input
+                        className="sfu-input"
+                        type="date"
+                        value={sharedDate}
+                        style={{ maxWidth: 160, marginTop: 0 }}
+                        onChange={e => setSharedDate(e.target.value)}
+                      />
+                      <button className="sfu-apply-btn" onClick={applySharedToAll}>
+                        Apply date &amp; metadata →
+                      </button>
+                    </div>
+                  )}
+
+                  <div className="sfu-file-list">
+                    {queue.map(entry => (
+                      <FileMetaCard
+                        key={entry.id}
+                        entry={entry}
+                        corpus={corpus}
+                        disabled={uploading}
+                        onChange={patch => updateEntry(entry.id, patch)}
+                        onRemove={() => removeFromQueue(entry.id)}
+                      />
+                    ))}
+                  </div>
+                </>
               )}
 
-              {preview && <div className="sfu-preview"><img src={preview} alt="Preview" /></div>}
-
-              {/* Metadata fields — labels match Firestore field names */}
-              <div className="sfu-fields">
-                <div className="sfu-field">
-                  <label className="sfu-label">Date</label>
-                  <input
-                    className="sfu-input"
-                    type="date"
-                    value={uploadDate}
-                    onChange={e => setUploadDate(e.target.value)}
-                  />
-                </div>
-                <div className="sfu-field">
-                  <label className="sfu-label">People</label>
-                  <PeopleInput
-                    value={uploadPeople}
-                    onChange={setUploadPeople}
-                    corpus={corpus}
-                  />
-                </div>
-                <div className="sfu-field">
-                  <label className="sfu-label">Description</label>
-                  <textarea
-                    className="sfu-textarea"
-                    placeholder="Additional information…"
-                    value={uploadDesc}
-                    onChange={e => setUploadDesc(e.target.value)}
-                  />
-                </div>
-              </div>
-
+              {/* Overall progress bar while uploading */}
               {uploading && (
                 <div className="sfu-progress-wrap">
                   <div className="sfu-progress-header">
-                    <span className="sfu-progress-label">Transferring</span>
-                    <span className="sfu-progress-pct">{progress}%</span>
+                    <span className="sfu-progress-label">Uploading batch</span>
+                    <span className="sfu-progress-pct">{overallProg}%</span>
                   </div>
                   <div className="sfu-progress-track">
-                    <div className="sfu-progress-bar" style={{ width: `${progress}%` }} />
+                    <div className="sfu-progress-bar" style={{ width: `${overallProg}%` }} />
                   </div>
                 </div>
               )}
 
-              <button className="sfu-btn" onClick={uploadFile} disabled={!selectedFile || uploading}>
-                {uploading ? <><span className="sfu-btn-loader" />Uploading…</> : "Upload File"}
+              <button
+                className="sfu-btn"
+                onClick={uploadAll}
+                disabled={pendingCount === 0 || uploading}
+              >
+                {uploading
+                  ? <><span className="sfu-btn-loader" />Uploading…</>
+                  : pendingCount > 0
+                    ? `Upload ${pendingCount} file${pendingCount !== 1 ? "s" : ""}`
+                    : "Upload Files"}
               </button>
 
               {message && (
@@ -765,6 +925,7 @@ export default function SingleFileUploader() {
                   <span className="sfu-message-dot" />{message.text}
                 </div>
               )}
+
             </div>
           </div>
 
@@ -795,15 +956,12 @@ export default function SingleFileUploader() {
                 <div key={file.id} className="sfu-record">
                   <div className="sfu-record-main">
                     <span className="sfu-row-ext">{getFileExt(file.original_filename)}</span>
-
-                    {/* Clicking the info area expands/collapses details */}
                     <div
                       className="sfu-record-info"
                       onClick={() => setExpanded(expanded === file.id ? null : file.id)}
                     >
                       <div className="sfu-record-name">{file.original_filename}</div>
                       <div className="sfu-record-meta">
-                        {/* image_date from Firestore; show "unknown" in amber if absent */}
                         <span className={`sfu-record-date${!file.image_date ? " unknown" : ""}`}>
                           {file.image_date || "unknown"}
                         </span>
@@ -817,11 +975,7 @@ export default function SingleFileUploader() {
                     </div>
 
                     <div className="sfu-record-actions">
-                      <button
-                        className="sfu-icon-btn edit"
-                        title="Edit"
-                        onClick={() => setEditingFile(file)}
-                      >
+                      <button className="sfu-icon-btn edit" title="Edit" onClick={() => setEditingFile(file)}>
                         <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
                           <path d="M9.5 2.5l2 2L4 12H2v-2L9.5 2.5z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"/>
                         </svg>
@@ -829,25 +983,15 @@ export default function SingleFileUploader() {
 
                       {confirmDelete === file.id ? (
                         <div className="sfu-confirm">
-                          <button className="sfu-btn-danger" onClick={() => deleteFile(file.id)}>
-                            Delete
-                          </button>
-                          <button
-                            className="sfu-icon-btn cancel"
-                            title="Cancel"
-                            onClick={() => setConfirmDelete(null)}
-                          >
+                          <button className="sfu-btn-danger" onClick={() => deleteFile(file.id)}>Delete</button>
+                          <button className="sfu-icon-btn cancel" title="Cancel" onClick={() => setConfirmDelete(null)}>
                             <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
                               <path d="M1.5 1.5l10 10M11.5 1.5l-10 10" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
                             </svg>
                           </button>
                         </div>
                       ) : (
-                        <button
-                          className="sfu-icon-btn delete"
-                          title="Delete"
-                          onClick={() => setConfirmDelete(file.id)}
-                        >
+                        <button className="sfu-icon-btn delete" title="Delete" onClick={() => setConfirmDelete(file.id)}>
                           <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
                             <path d="M2 4h10M5 4V2.5h4V4M5.5 6.5v4M8.5 6.5v4M3 4l.75 7.5h6.5L11 4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
                           </svg>
@@ -856,16 +1000,13 @@ export default function SingleFileUploader() {
                     </div>
                   </div>
 
-                  {/* Expanded details */}
                   {expanded === file.id && (
                     <div className="sfu-record-details">
                       {(file.people || []).length > 0 && (
                         <div className="sfu-detail-row">
                           <span className="sfu-detail-key">People</span>
                           <span className="sfu-detail-val">
-                            {file.people.map(p => (
-                              <span key={p} className="sfu-person-pill">{p}</span>
-                            ))}
+                            {file.people.map(p => <span key={p} className="sfu-person-pill">{p}</span>)}
                           </span>
                         </div>
                       )}

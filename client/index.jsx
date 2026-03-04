@@ -6,6 +6,7 @@ import Navbar from "./components/Navbar.jsx"
 import Footer from "./components/Footer.jsx"
 import LoginPage from "./components/LoginPage.jsx"
 import SingleFileUploader from "./components/SingleFileUploader.jsx"
+import MultiFileUploader from "./components/MultiFileUploader.jsx"
 import ImageGallery from "./components/ImageGallery.jsx"
 import './index.css'
 
@@ -33,6 +34,9 @@ function App() {
         } />
         <Route path="/" element={
           <ProtectedRoute><SingleFileUploader /></ProtectedRoute>
+        } />
+        <Route path="/upload-multi" element={
+          <ProtectedRoute><MultiFileUploader /></ProtectedRoute>
         } />
         <Route path="/gallery" element={
           <ProtectedRoute><ImageGallery /></ProtectedRoute>

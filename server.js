@@ -144,6 +144,82 @@ app.post("/api/upload", upload.single("file"), async (req, res) => {
   }
 });
 
+// POST /api/uploadmulti — accepts up to 20 files, each with its own metadata
+// FormData fields per file (indexed): file_0, file_1 … and image_date_0, people_0,
+// description_0, image_date_1, people_1, description_1 …
+app.post("/api/uploadmulti", upload.any(), async (req, res) => {
+  if (!req.files || req.files.length === 0) {
+    return res.status(400).json({ error: "No files provided or file types not allowed" });
+  }
+
+  const MAX_FILES = 20;
+  if (req.files.length > MAX_FILES) {
+    return res.status(400).json({ error: `Too many files — maximum is ${MAX_FILES}` });
+  }
+
+  // Process every file in parallel; collect individual results/errors
+  const results = await Promise.all(
+    req.files.map(async (file) => {
+      // Metadata fields are indexed by the field name suffix, e.g. "image_date_0"
+      // The suffix is derived from the multer fieldname: "file_0" → index "0"
+      const idx         = file.fieldname.replace(/^file_?/, "");
+      const image_date  = req.body[`image_date_${idx}`]  || "";
+      const people      = req.body[`people_${idx}`]      || "";
+      const description = req.body[`description_${idx}`] || "";
+
+      const peopleList   = parsePeopleString(people);
+      const originalName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_");
+      const uniqueId     = uuidv4().slice(0, 8);
+      const filename     = `${timestamp()}_${uniqueId}_${originalName}`;
+      const contentType  = file.mimetype || "application/octet-stream";
+
+      try {
+        await uploadToGCS(file.buffer, filename, contentType);
+
+        const blob   = bucket.file(filename);
+        const [meta] = await blob.getMetadata();
+        const fileUrl = `https://storage.googleapis.com/${BUCKET_NAME}/${filename}`;
+
+        const docRef = db.collection(FILES_COL).doc();
+        await docRef.set({
+          filename,
+          original_filename: originalName,
+          url:          fileUrl,
+          content_type: contentType,
+          size:         parseInt(meta.size, 10),
+          uploaded_at:  Firestore.Timestamp.now(),
+          image_date:   image_date || null,
+          people:       peopleList,
+          description:  description || null,
+        });
+
+        return {
+          success:           true,
+          filename,
+          original_filename: originalName,
+          url:               fileUrl,
+          doc_id:            docRef.id,
+        };
+      } catch (err) {
+        console.error(`Upload error for ${originalName}:`, err);
+        return {
+          success:           false,
+          original_filename: originalName,
+          error:             err.message,
+        };
+      }
+    })
+  );
+
+  const succeeded = results.filter(r => r.success).length;
+  const failed    = results.length - succeeded;
+
+  res.status(failed === results.length ? 500 : 200).json({
+    results,
+    summary: { total: results.length, succeeded, failed },
+  });
+});
+
 // GET /api/files  — supports ?search=, ?person=, ?date_from=, ?date_to=
 app.get("/api/files", async (req, res) => {
   try {
