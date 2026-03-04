@@ -46,14 +46,14 @@ const STYLES = `
 
   .nav-logo-text {
     font-weight: 600;
-    font-size: 0.95rem;
+    font-size: 1.5rem;
     color: #d4d8e8;
     letter-spacing: -0.01em;
   }
 
   .nav-logo-sub {
     font-family: 'DM Mono', monospace;
-    font-size: 9px;
+    font-size: 12px;
     letter-spacing: 0.1em;
     text-transform: uppercase;
     color: #565c78;
@@ -101,6 +101,7 @@ const STYLES = `
     border: 1px solid #2e3140;
     border-radius: 8px;
     padding: 0.4rem;
+    margin: -0.4rem 0 -0.75rem;
     color: #8d93ad;
     cursor: pointer;
     transition: color 0.15s, border-color 0.15s;
@@ -137,7 +138,7 @@ const STYLES = `
   .nav-signout {
     background: none; border: 1px solid var(--border2); border-radius: 7px;
     padding: 0.3rem 0.65rem; color: var(--text2); cursor: pointer;
-    font-family: 'Barlow', sans-serif; font-size: 0.775rem; font-weight: 500;
+    font-family: 'Barlow', sans-serif; font-size: 1rem; font-weight: 500;
     transition: border-color 0.15s, color 0.15s;
     white-space: nowrap;
   }
@@ -173,11 +174,28 @@ const NAV_ITEMS = [
       </svg>
     ),
   },
+  {
+    to: "/admin/audit",
+    label: "Audit Log",
+    end: false,
+    icon: (
+      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-gamepad-directional-icon lucide-gamepad-directional">
+        <path d="M11.146 15.854a1.207 1.207 0 0 1 1.708 0l1.56 1.56A2 2 0 0 1 15 18.828V21a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1v-2.172a2 2 0 0 1 .586-1.414z"/>
+        <path d="M18.828 15a2 2 0 0 1-1.414-.586l-1.56-1.56a1.207 1.207 0 0 1 0-1.708l1.56-1.56A2 2 0 0 1 18.828 9H21a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1z"/>
+        <path d="M6.586 14.414A2 2 0 0 1 5.172 15H3a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1h2.172a2 2 0 0 1 1.414.586l1.56 1.56a1.207 1.207 0 0 1 0 1.708z"/>
+        <path d="M9 3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2.172a2 2 0 0 1-.586 1.414l-1.56 1.56a1.207 1.207 0 0 1-1.708 0l-1.56-1.56A2 2 0 0 1 9 5.172z"/>
+      </svg>
+    ),
+  },
 ]
 
 export default function Navbar() {
   const [open, setOpen] = useState(false)
   const { user, logout } = useAuth()
+
+  const visibleNavItems = NAV_ITEMS.filter(item => 
+    item.to !== "/admin/audit" || user?.email === "mightyoakcoder@gmail.com"
+  );
 
   return (
     <>
@@ -185,13 +203,21 @@ export default function Navbar() {
       <nav className="nav-root">
         <div className="nav-inner" style={{ position: "relative" }}>
 
+{/* Mobile toggle */}
+          <button className="nav-toggle" onClick={() => setOpen(v => !v)} aria-label="Menu">
+            {open ? (
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <path d="M3 3l10 10M13 3L3 13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+              </svg>
+            ) : (
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+              </svg>
+            )} Menu
+          </button>
+
           {/* Logo */}
           <NavLink to="/" className="nav-logo" onClick={() => setOpen(false)}>
-            <div className="nav-logo-icon">
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                <path d="M7 1.5l1.5 3h3l-2.5 2 1 3L7 8l-3 1.5 1-3L2.5 4.5h3L7 1.5z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/>
-              </svg>
-            </div>
             <div>
               <div className="nav-logo-text">Snow Archive</div>
               <div className="nav-logo-sub">Photo Library</div>
@@ -200,7 +226,7 @@ export default function Navbar() {
 
           {/* Links */}
           <div className={`nav-links${open ? " open" : ""}`}>
-            {NAV_ITEMS.map(({ to, label, end, icon }) => (
+            {visibleNavItems.map(({ to, label, end, icon }) => (
               <NavLink
                 key={to}
                 to={to}
@@ -214,25 +240,14 @@ export default function Navbar() {
             ))}
           </div>
 
-          {/* Mobile toggle */}
-          <button className="nav-toggle" onClick={() => setOpen(v => !v)} aria-label="Menu">
-            {open ? (
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <path d="M3 3l10 10M13 3L3 13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-              </svg>
-            ) : (
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-              </svg>
-            )}
-          </button>
-
           {/* User info + sign out */}
-          {user && (
+          {user ? (
             <div className="nav-user">
               <span className="nav-user-email">{user.email}</span>
               <button className="nav-signout" onClick={logout}>Sign out</button>
             </div>
+          ) : (
+            <NavLink to="/login" className="nav-signout" style={{ textDecoration: "none" }}>Sign in</NavLink>
           )}
 
         </div>

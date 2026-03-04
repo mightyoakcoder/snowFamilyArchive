@@ -29,6 +29,44 @@ async function requireAuth(req, res, next) {
   }
 }
 
+// GET /api/public/files — no auth required, returns only non-private files
+// Supports the same ?search=, ?person=, ?date_from=, ?date_to= filters
+app.get("/api/public/files", async (req, res) => {
+  try {
+    const { search = "", person = "", date_from, date_to } = req.query;
+    const snapshot = await db.collection(FILES_COL).get();
+    const files = [];
+
+    snapshot.forEach(doc => {
+      const data = { ...doc.data(), id: doc.id };
+
+      if (data.is_private === true) return;
+
+      if (person) {
+        const match = (data.people || []).some(p =>
+          p.toLowerCase().includes(person.toLowerCase())
+        );
+        if (!match) return;
+      }
+
+      if (date_from && data.image_date && data.image_date < date_from) return;
+      if (date_to   && data.image_date && data.image_date > date_to)   return;
+
+      if (search) {
+        const haystack = `${data.description || ""} ${data.original_filename || ""} ${data.filename || ""}`.toLowerCase();
+        if (!haystack.includes(search.toLowerCase())) return;
+      }
+
+      files.push(data);
+    });
+
+    res.json({ files, count: files.length });
+  } catch (err) {
+    console.error("Public files list error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Apply auth to all /api/ routes
 app.use("/api", requireAuth);
 
@@ -43,6 +81,26 @@ const storage  = new Storage();
 const bucket   = storage.bucket(BUCKET_NAME);
 const db       = new Firestore();
 const FILES_COL = "uploaded_files";
+const AUDIT_COL = "audit_log";
+
+// ── Audit log helper ───────────────────────────────────────────────────────
+// Writes a single entry to the audit_log collection. Fire-and-forget —
+// we never let a logging failure block the actual response.
+function writeAuditLog({ action, fileId, filename, user, detail = {} }) {
+  const entry = {
+    action,                          // "upload" | "edit" | "delete" | "view"
+    file_id:    fileId   || null,
+    filename:   filename || null,
+    user_uid:   user?.uid   || null,
+    user_email: user?.email || null,
+    user_name:  user?.name  || null,
+    detail,                          // action-specific payload
+    timestamp:  Firestore.Timestamp.now(),
+  };
+  db.collection(AUDIT_COL).add(entry).catch(err =>
+    console.error("Audit log write failed:", err)
+  );
+}
 
 // ── Multer (in-memory, so we can stream straight to GCS) ───────────────────
 const upload = multer({
@@ -132,6 +190,14 @@ app.post("/api/upload", upload.single("file"), async (req, res) => {
     };
     await docRef.set(fileMetadata);
 
+    writeAuditLog({
+      action:   "upload",
+      fileId:   docRef.id,
+      filename: originalName,
+      user:     req.firebaseUser,
+      detail:   { size: fileMetadata.size, is_private: fileMetadata.is_private },
+    });
+
     res.json({
       success:           true,
       filename,
@@ -190,7 +256,17 @@ app.post("/api/uploadmulti", upload.any(), async (req, res) => {
           is_private:   is_private === "true",
         });
 
-        return { success: true, filename, original_filename: originalName, url: fileUrl, doc_id: docRef.id };
+        const result = { success: true, filename, original_filename: originalName, url: fileUrl, doc_id: docRef.id };
+
+        writeAuditLog({
+          action:   "upload",
+          fileId:   docRef.id,
+          filename: originalName,
+          user:     req.firebaseUser,
+          detail:   { size: parseInt(meta.size, 10), is_private: is_private === "true" },
+        });
+
+        return result;
       } catch (err) {
         console.error(`Upload error for ${originalName}:`, err);
         return { success: false, original_filename: originalName, error: err.message };
@@ -204,42 +280,6 @@ app.post("/api/uploadmulti", upload.any(), async (req, res) => {
     results,
     summary: { total: results.length, succeeded, failed },
   });
-});
-
-// GET /api/public/files — no auth required, returns only non-private files
-// Supports the same ?search=, ?person=, ?date_from=, ?date_to= filters
-app.get("/api/public/files", async (req, res) => {
-  try {
-    const { search = "", person = "", date_from, date_to } = req.query;
-    const snapshot = await db.collection(FILES_COL).where("is_private", "!=", true).get();
-    const files = [];
-
-    snapshot.forEach(doc => {
-      const data = { ...doc.data(), id: doc.id };
-
-      if (person) {
-        const match = (data.people || []).some(p =>
-          p.toLowerCase().includes(person.toLowerCase())
-        );
-        if (!match) return;
-      }
-
-      if (date_from && data.image_date && data.image_date < date_from) return;
-      if (date_to   && data.image_date && data.image_date > date_to)   return;
-
-      if (search) {
-        const haystack = `${data.description || ""} ${data.original_filename || ""} ${data.filename || ""}`.toLowerCase();
-        if (!haystack.includes(search.toLowerCase())) return;
-      }
-
-      files.push(data);
-    });
-
-    res.json({ files, count: files.length });
-  } catch (err) {
-    console.error("Public files list error:", err);
-    res.status(500).json({ error: err.message });
-  }
 });
 
 // GET /api/files  — supports ?search=, ?person=, ?date_from=, ?date_to=
@@ -294,6 +334,8 @@ app.patch("/api/files/:id", async (req, res) => {
     const doc    = await docRef.get();
     if (!doc.exists) return res.status(404).json({ error: "File not found" });
 
+    const previousValue = doc.data()[field];
+
     let updateValue;
     if (field === "people") {
       updateValue = parsePeopleString(value);
@@ -306,6 +348,15 @@ app.patch("/api/files/:id", async (req, res) => {
     }
 
     await docRef.update({ [field]: updateValue });
+
+    writeAuditLog({
+      action:   "edit",
+      fileId:   req.params.id,
+      filename: doc.data().original_filename,
+      user:     req.firebaseUser,
+      detail:   { field, from: previousValue, to: updateValue },
+    });
+
     res.json({ success: true, file_id: req.params.id, field, value: updateValue });
   } catch (err) {
     console.error("Patch error:", err);
@@ -328,10 +379,61 @@ app.delete("/api/files/:id", async (req, res) => {
     }
 
     await docRef.delete();
+
+    writeAuditLog({
+      action:   "delete",
+      fileId:   req.params.id,
+      filename: doc.data().original_filename,
+      user:     req.firebaseUser,
+      detail:   { was_private: doc.data().is_private || false },
+    });
+
     res.json({ success: true, file_id: req.params.id });
   } catch (err) {
     console.error("Delete error:", err);
     res.status(500).json({ error: `Delete failed: ${err.message}` });
+  }
+});
+
+// POST /api/files/:id/view — logs a view event (called by the frontend on lightbox open)
+app.post("/api/files/:id/view", async (req, res) => {
+  try {
+    const doc = await db.collection(FILES_COL).doc(req.params.id).get();
+    if (!doc.exists) return res.status(404).json({ error: "File not found" });
+
+    writeAuditLog({
+      action:   "view",
+      fileId:   req.params.id,
+      filename: doc.data().original_filename,
+      user:     req.firebaseUser,
+      detail:   {},
+    });
+
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/audit — returns audit log entries, newest first
+// Supports ?file_id=, ?action=, ?limit= (default 200)
+app.get("/api/audit", async (req, res) => {
+  try {
+    const { file_id, action, limit = "200" } = req.query;
+    const maxResults = Math.min(parseInt(limit, 10) || 200, 500);
+
+    let query = db.collection(AUDIT_COL).orderBy("timestamp", "desc").limit(maxResults);
+    if (file_id) query = query.where("file_id", "==", file_id);
+    if (action)  query = query.where("action",  "==", action);
+
+    const snapshot = await query.get();
+    const entries  = [];
+    snapshot.forEach(doc => entries.push({ id: doc.id, ...doc.data() }));
+
+    res.json({ entries, count: entries.length });
+  } catch (err) {
+    console.error("Audit log fetch error:", err);
+    res.status(500).json({ error: err.message });
   }
 });
 

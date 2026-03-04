@@ -12,6 +12,7 @@ import './index.css'
 const SingleFileUploader = lazy(() => import("./components/SingleFileUploader.jsx"))
 const MultiFileUploader  = lazy(() => import("./components/MultiFileUploader.jsx"))
 const ImageGallery       = lazy(() => import("./components/ImageGallery.jsx"))
+const AuditLog            = lazy(() => import("./components/AuditLog.jsx"))
 
 // Wraps any route that requires login.
 // - Still loading Firebase state → show nothing (avoids flash of login page)
@@ -24,26 +25,35 @@ function ProtectedRoute({ children }) {
   return children
 }
 
+function AdminRoute({ children }) {
+  const { user, loading } = useAuth()
+  if (loading) return null
+  if (!user)   return <Navigate to="/login" replace />
+  if (user.email !== "mightyoakcoder@gmail.com") return <Navigate to="/" replace />
+  return children
+}
+
 function App() {
   const { user, loading } = useAuth()
   if (loading) return null
 
   return (
     <BrowserRouter>
-      {user && <Navbar />}
+      <Navbar />
       <Suspense fallback={null}>
         <Routes>
           <Route path="/login" element={
             user ? <Navigate to="/" replace /> : <LoginPage />
           } />
-          <Route path="/" element={
-            <ProtectedRoute><SingleFileUploader /></ProtectedRoute>
-          } />
+          <Route path="/" element={<ImageGallery />} />
           <Route path="/upload-multi" element={
             <ProtectedRoute><MultiFileUploader /></ProtectedRoute>
           } />
           <Route path="/gallery" element={
             <ProtectedRoute><ImageGallery /></ProtectedRoute>
+          } />
+          <Route path="/admin/audit" element={
+            <AdminRoute><AuditLog /></AdminRoute>
           } />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
