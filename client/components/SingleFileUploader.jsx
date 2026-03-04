@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
+import { Link } from "react-router-dom";
 import api from "../api.js";
 
 // ─── Field name mapping (backend uses image_date / people / description) ───
@@ -750,7 +751,7 @@ export default function SingleFileUploader() {
           <div className="sfu-header">
             <div className="sfu-eyebrow">File Transfer</div>
             <h1 className="sfu-title">Upload a File</h1>
-            <p className="sfu-subtitle">Drag, drop, or select a file to get started. <span>Looking to upload multiple files at once? <a href="">Click Here</a></span></p>
+            <p className="sfu-subtitle">Drag, drop, or select a file to get started. <span>Looking to upload multiple files at once? <Link to="/upload-multi">Click Here</Link></span></p>
           </div>
 
           <div className="sfu-card">
