@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
 import api from "../api.js";
 
 const STYLES = `
@@ -13,7 +12,7 @@ const STYLES = `
     --border2:  #353849;
     --accent:   #7b8cff;
     --accent2:  #a5b0ff;
-    --dim:      #565c78;
+    --dim:      #818ec4;
     --text:     #d4d8e8;
     --text2:    #8d93ad;
     --success:  #4ade98;
@@ -53,10 +52,10 @@ const STYLES = `
     color: var(--accent); opacity: 0.8; margin-bottom: 0.6rem;
   }
   .gal-title {
-    font-size: clamp(1.7rem, 5vw, 2.1rem); font-weight: 600;
+    font-size: clamp(1.7rem, 5vw, 2rem); font-weight: 600;
     letter-spacing: -0.01em; color: var(--text); line-height: 1.1; margin: 0;
   }
-  .gal-subtitle { font-size: 0.875rem; color: var(--text2); margin-top: 0.4rem; font-weight: 300; }
+  .gal-subtitle { font-size: 1rem; color: var(--text2); margin-top: 0.4rem; font-weight: 300; }
 
   /* ── Toolbar ── */
   .gal-toolbar {
@@ -72,7 +71,7 @@ const STYLES = `
   .gal-search {
     width: 100%; background: var(--surface); border: 1px solid var(--border2); border-radius: 10px;
     padding: 0.6rem 0.75rem 0.6rem 2.25rem; font-family: 'Barlow', sans-serif;
-    font-size: 0.875rem; color: var(--text); outline: none;
+    font-size: 1rem; color: var(--text); outline: none;
     transition: border-color 0.15s, box-shadow 0.15s; box-sizing: border-box;
   }
   .gal-search:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(123,140,255,0.12); }
@@ -101,7 +100,7 @@ const STYLES = `
   .gal-filters {
     background: var(--surface); border: 1px solid var(--border2); border-radius: 12px;
     padding: 1rem 1.25rem; margin-bottom: 1.25rem;
-    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.875rem;
+    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem;
     animation: galSlideIn 0.2s ease;
   }
   .gal-filter-field { display: flex; flex-direction: column; gap: 0.3rem; }
@@ -624,8 +623,8 @@ import { Lock, LockOpen } from "lucide-react";
 // ── Lock icon helper ────────────────────────────────────────────────────────
 function LockIcon({ open = false, size = 13 }) {
   return open
-    ? <LockOpen size={size} strokeWidth={3.5} />
-    : <Lock     size={size} strokeWidth={3} />;
+    ? <LockOpen size={size} strokeWidth={1.5} />
+    : <Lock     size={size} strokeWidth={1.5} />;
 }
 
 // ── Privacy toggle ─────────────────────────────────────────────────────────
@@ -904,6 +903,8 @@ function Lightbox({ files, index, onClose, onNav, onEdit, onDelete }) {
 
 // ── Main component ─────────────────────────────────────────────────────────
 export default function ImageGallery() {
+  const [files,       setFiles]       = useState([]);
+  const [loading,     setLoading]     = useState(true);
   const [view,        setView]        = useState("grid");
   const [search,      setSearch]      = useState("");
   const [showFilters, setShowFilters] = useState(false);
@@ -914,8 +915,8 @@ export default function ImageGallery() {
   const [editingFile,    setEditingFile]     = useState(null);
   const [currentUser,    setCurrentUser]     = useState(undefined);
 
-  const queryClient = useQueryClient();
-  const queryKey = ["files", currentUser ? "authed" : "public"];
+  const hasFilters = filterPerson || filterDateFrom || filterDateTo;
+  const corpus = buildCorpus(files);
 
   useEffect(() => {
     import("firebase/auth").then(({ getAuth, onAuthStateChanged }) => {
@@ -925,23 +926,27 @@ export default function ImageGallery() {
     }).catch(() => setCurrentUser(null));
   }, []);
 
-  const { data: files = [], isLoading: loading } = useQuery({
-    queryKey,
-    queryFn: async () => {
+  useEffect(() => {
+    if (currentUser !== undefined) loadFiles();
+  }, [currentUser]);
+
+  async function loadFiles() {
+    setLoading(true);
+    try {
       const endpoint = currentUser ? "/api/files" : "/api/public/files";
       const res = await api.get(endpoint);
-      return (res.data.files || []).sort((a, b) => {
+      const sorted = (res.data.files || []).sort((a, b) => {
         const ta = a.uploaded_at?._seconds || 0;
         const tb = b.uploaded_at?._seconds || 0;
         return tb - ta;
       });
-    },
-    enabled: currentUser !== undefined,
-    staleTime: 5 * 60 * 1000,
-  });
-
-  const hasFilters = filterPerson || filterDateFrom || filterDateTo;
-  const corpus = buildCorpus(files);
+      setFiles(sorted);
+    } catch (err) {
+      console.error("Failed to load files:", err);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   // PATCH /api/files/:id — one request per field including is_private
   async function saveEdit(fileId, patch) {
@@ -954,9 +959,9 @@ export default function ImageGallery() {
     await Promise.all(updates.map(u =>
       api.patch(`/api/files/${fileId}`, u).catch(() => {})
     ));
-    queryClient.setQueryData(queryKey, prev =>
-      (prev || []).map(f => f.id === fileId ? { ...f, ...patch } : f)
-    );
+    setFiles(prev => prev.map(f =>
+      f.id === fileId ? { ...f, ...patch } : f
+    ));
     setEditingFile(null);
   }
 
@@ -967,14 +972,14 @@ export default function ImageGallery() {
     } catch (err) {
       console.error("Delete failed:", err);
     }
-    const remaining = files.filter(f => f.id !== fileId);
-    queryClient.setQueryData(queryKey, remaining);
+    setFiles(prev => prev.filter(f => f.id !== fileId));
     // If we just deleted the last item close the lightbox,
     // otherwise clamp the index so we don't go out of bounds
     setLightboxIdx(prev => {
       if (prev === null) return null;
-      if (remaining.length === 0) return null;
-      return Math.min(prev, remaining.length - 1);
+      const remaining = files.filter(f => f.id !== fileId).length;
+      if (remaining === 0) return null;
+      return Math.min(prev, remaining - 1);
     });
   }
   const filtered = files.filter(f => {
@@ -996,7 +1001,12 @@ export default function ImageGallery() {
     setSearch(""); setFilterPerson(""); setFilterDateFrom(""); setFilterDateTo("");
   }
 
-  const openLightbox = useCallback((idx) => setLightboxIdx(idx), []);
+  const openLightbox = useCallback((idx) => {
+    setLightboxIdx(idx);
+    // Log the view — fire and forget, don't await
+    const file = filtered[idx];
+    if (file?.id) api.post(`/api/files/${file.id}/view`).catch(() => {});
+  }, [filtered]);
 
   const navigate = useCallback((delta) => {
     setLightboxIdx(i => {
