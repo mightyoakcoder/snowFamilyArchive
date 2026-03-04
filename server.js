@@ -104,7 +104,7 @@ app.post("/api/upload", upload.single("file"), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: "No file provided or file type not allowed" });
 
   try {
-    const { image_date = "", people = "", description = "" } = req.body;
+    const { image_date = "", people = "", description = "", is_private = "false" } = req.body;
     const peopleList    = parsePeopleString(people);
     const originalName  = req.file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_");
     const uniqueId      = uuidv4().slice(0, 8);
@@ -128,6 +128,7 @@ app.post("/api/upload", upload.single("file"), async (req, res) => {
       image_date:   image_date || null,
       people:       peopleList,
       description:  description || null,
+      is_private:   is_private === "true",
     };
     await docRef.set(fileMetadata);
 
@@ -145,27 +146,23 @@ app.post("/api/upload", upload.single("file"), async (req, res) => {
 });
 
 // POST /api/uploadmulti — accepts up to 20 files, each with its own metadata
-// FormData fields per file (indexed): file_0, file_1 … and image_date_0, people_0,
-// description_0, image_date_1, people_1, description_1 …
+// FormData fields per file (indexed): file_0, image_date_0, people_0, description_0, is_private_0 …
 app.post("/api/uploadmulti", upload.any(), async (req, res) => {
   if (!req.files || req.files.length === 0) {
     return res.status(400).json({ error: "No files provided or file types not allowed" });
   }
-
   const MAX_FILES = 20;
   if (req.files.length > MAX_FILES) {
     return res.status(400).json({ error: `Too many files — maximum is ${MAX_FILES}` });
   }
 
-  // Process every file in parallel; collect individual results/errors
   const results = await Promise.all(
     req.files.map(async (file) => {
-      // Metadata fields are indexed by the field name suffix, e.g. "image_date_0"
-      // The suffix is derived from the multer fieldname: "file_0" → index "0"
       const idx         = file.fieldname.replace(/^file_?/, "");
       const image_date  = req.body[`image_date_${idx}`]  || "";
       const people      = req.body[`people_${idx}`]      || "";
       const description = req.body[`description_${idx}`] || "";
+      const is_private  = req.body[`is_private_${idx}`]  || "false";
 
       const peopleList   = parsePeopleString(people);
       const originalName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_");
@@ -175,9 +172,8 @@ app.post("/api/uploadmulti", upload.any(), async (req, res) => {
 
       try {
         await uploadToGCS(file.buffer, filename, contentType);
-
-        const blob   = bucket.file(filename);
-        const [meta] = await blob.getMetadata();
+        const blob    = bucket.file(filename);
+        const [meta]  = await blob.getMetadata();
         const fileUrl = `https://storage.googleapis.com/${BUCKET_NAME}/${filename}`;
 
         const docRef = db.collection(FILES_COL).doc();
@@ -191,33 +187,59 @@ app.post("/api/uploadmulti", upload.any(), async (req, res) => {
           image_date:   image_date || null,
           people:       peopleList,
           description:  description || null,
+          is_private:   is_private === "true",
         });
 
-        return {
-          success:           true,
-          filename,
-          original_filename: originalName,
-          url:               fileUrl,
-          doc_id:            docRef.id,
-        };
+        return { success: true, filename, original_filename: originalName, url: fileUrl, doc_id: docRef.id };
       } catch (err) {
         console.error(`Upload error for ${originalName}:`, err);
-        return {
-          success:           false,
-          original_filename: originalName,
-          error:             err.message,
-        };
+        return { success: false, original_filename: originalName, error: err.message };
       }
     })
   );
 
   const succeeded = results.filter(r => r.success).length;
   const failed    = results.length - succeeded;
-
   res.status(failed === results.length ? 500 : 200).json({
     results,
     summary: { total: results.length, succeeded, failed },
   });
+});
+
+// GET /api/public/files — no auth required, returns only non-private files
+// Supports the same ?search=, ?person=, ?date_from=, ?date_to= filters
+app.get("/api/public/files", async (req, res) => {
+  try {
+    const { search = "", person = "", date_from, date_to } = req.query;
+    const snapshot = await db.collection(FILES_COL).where("is_private", "!=", true).get();
+    const files = [];
+
+    snapshot.forEach(doc => {
+      const data = { ...doc.data(), id: doc.id };
+
+      if (person) {
+        const match = (data.people || []).some(p =>
+          p.toLowerCase().includes(person.toLowerCase())
+        );
+        if (!match) return;
+      }
+
+      if (date_from && data.image_date && data.image_date < date_from) return;
+      if (date_to   && data.image_date && data.image_date > date_to)   return;
+
+      if (search) {
+        const haystack = `${data.description || ""} ${data.original_filename || ""} ${data.filename || ""}`.toLowerCase();
+        if (!haystack.includes(search.toLowerCase())) return;
+      }
+
+      files.push(data);
+    });
+
+    res.json({ files, count: files.length });
+  } catch (err) {
+    console.error("Public files list error:", err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // GET /api/files  — supports ?search=, ?person=, ?date_from=, ?date_to=
@@ -262,7 +284,7 @@ app.get("/api/files", async (req, res) => {
 app.patch("/api/files/:id", async (req, res) => {
   try {
     const { field, value } = req.body;
-    const ALLOWED_FIELDS = new Set(["image_date","people","description"]);
+    const ALLOWED_FIELDS = new Set(["image_date","people","description","is_private"]);
 
     if (!field || !ALLOWED_FIELDS.has(field)) {
       return res.status(400).json({ error: "Invalid or missing field name" });
@@ -277,6 +299,8 @@ app.patch("/api/files/:id", async (req, res) => {
       updateValue = parsePeopleString(value);
     } else if (field === "image_date") {
       updateValue = value || null;
+    } else if (field === "is_private") {
+      updateValue = value === true || value === "true";
     } else {
       updateValue = value || null;
     }
