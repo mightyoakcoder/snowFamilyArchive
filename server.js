@@ -16,6 +16,64 @@ app.use(express.json());
 // Cloud Run: credentials are picked up automatically from the service account
 admin.initializeApp({ projectId: process.env.VITE_FIREBASE_PROJECT_ID });
 
+// Simple in-memory cache for IP geo lookups
+const geoCache = new Map();
+
+async function getGeoInfo(ip) {
+  if (!ip || ip === '::1' || ip === '127.0.0.1') return null;
+  if (geoCache.has(ip)) return geoCache.get(ip);
+
+  try {
+    const token = process.env.IPINFO_TOKEN ? `?token=${process.env.IPINFO_TOKEN}` : '';
+    const res = await fetch(`https://ipinfo.io/${ip}/json${token}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    const geo = {
+      city: data.city || null,
+      region: data.region || null,
+      country: data.country || null,
+      org: data.org || null,
+    };
+    geoCache.set(ip, geo);
+    return geo;
+  } catch {
+    return null;
+  }
+}
+
+// Skip logging static assets
+const ASSET_RE = /\.(js|css|png|jpg|jpeg|svg|ico|woff2?|ttf|map)(\?.*)?$/;
+const BOT_PATHS = /wp-admin|wp-login|phpMyAdmin|\.env|setup-config/i;
+const INTERNAL_IPS = (process.env.INTERNAL_IPS || '').split(',').map(s => s.trim());
+
+// Log page visits with geo enrichment
+app.use((req, _res, next) => {
+  if (ASSET_RE.test(req.path)) return next();
+  if (BOT_PATHS.test(req.path)) return next();
+
+  const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
+  if (INTERNAL_IPS.includes(ip)) return next();
+  
+  const referrer = req.headers['referer'] || req.headers['referrer'] || 'direct';
+  const userAgent = req.headers['user-agent'] || 'unknown';
+  
+
+  // Fire-and-forget so geo lookup doesn't slow the response
+  getGeoInfo(ip).then((geo) => {
+    console.log(JSON.stringify({
+      event: 'visit',
+      timestamp: new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }),
+      ip,
+      referrer,
+      userAgent,
+      path: req.path,
+      ...(geo && { city: geo.city, region: geo.region, country: geo.country, org: geo.org }),
+    }));
+  });
+
+  next();
+});
+
 // Middleware — verifies the Firebase ID token on every /api/ route
 async function requireAuth(req, res, next) {
   const header = req.headers.authorization || "";
