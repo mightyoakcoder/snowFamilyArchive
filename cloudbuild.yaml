@@ -1,92 +1,24 @@
-apiVersion: serving.knative.dev/v1
-kind: Service
-metadata:
-  name: snowarchive
-  namespace: '441420107433'
-  selfLink: /apis/serving.knative.dev/v1/namespaces/441420107433/services/snowarchive
-  uid: 51d8fe48-498a-45c3-93ce-b7bd1222bccd
-  resourceVersion: AAZKmMv7lPQ
-  generation: 26
-  creationTimestamp: '2026-02-09T17:58:40.800117Z'
-  labels:
-    cloud.googleapis.com/location: us-central1
-  annotations:
-    serving.knative.dev/creator: mightyoakcoder@gmail.com
-    serving.knative.dev/lastModifier: mightyoakcoder@gmail.com
-    run.googleapis.com/build-enable-automatic-updates: 'false'
-    run.googleapis.com/build-id: a01ec14b-840a-429a-8600-74b9f378ae5e
-    run.googleapis.com/build-image-uri: us-central1-docker.pkg.dev/snowarchive-486816/cloud-run-source-deploy/snowarchive
-    run.googleapis.com/build-name: projects/441420107433/locations/us-central1/builds/a01ec14b-840a-429a-8600-74b9f378ae5e
-    run.googleapis.com/build-source-location: gs://run-sources-snowarchive-486816-us-central1/services/snowarchive/1770869929.321821-de2135e0f03e4e6c8396fc4bb2f1e74e.zip#1770869930218773
-    run.googleapis.com/client-name: gcloud
-    run.googleapis.com/client-version: 555.0.0
-    run.googleapis.com/operation-id: 83055897-d41b-4c39-8da4-0b2eca0f741b
-    run.googleapis.com/ingress: all
-    run.googleapis.com/ingress-status: all
-    run.googleapis.com/maxScale: '1'
-    run.googleapis.com/urls: '["https://snowarchive-441420107433.us-central1.run.app","https://snowarchive-qkqeese6ya-uc.a.run.app"]'
-spec:
-  template:
-    metadata:
-      labels:
-        client.knative.dev/nonce: ahhnjavzqy
-        run.googleapis.com/startupProbeType: Default
-      annotations:
-        autoscaling.knative.dev/maxScale: '1'
-        run.googleapis.com/client-name: gcloud
-        run.googleapis.com/client-version: 555.0.0
-        run.googleapis.com/startup-cpu-boost: 'true'
-    spec:
-      containerConcurrency: 80
-      timeoutSeconds: 300
-      serviceAccountName: 441420107433-compute@developer.gserviceaccount.com
-      containers:
-      - image: us-central1-docker.pkg.dev/snowarchive-486816/cloud-run-source-deploy/snowarchive@sha256:34f5bdcb4078bba87d7407d23461c16401d31181c377c9e8b2241a3637493237
-        ports:
-        - name: http1
-          containerPort: 8080
-        env:
-        - name: GCS_BUCKET_NAME
-          valueFrom:
-            secretKeyRef:
-              name: GCS_BUCKET_NAME
-              key: latest
-        - name: VITE_FIREBASE_PROJECT_ID
-          valueFrom:
-            secretKeyRef:
-              name: VITE_FIREBASE_PROJECT_ID
-              key: latest
-        resources:
-          limits:
-            cpu: 1000m
-            memory: 512Mi
-        startupProbe:
-          timeoutSeconds: 240
-          periodSeconds: 240
-          failureThreshold: 1
-          tcpSocket:
-            port: 8080
-  traffic:
-  - percent: 100
-    latestRevision: true
-status:
-  observedGeneration: 26
-  conditions:
-  - type: Ready
-    status: 'True'
-    lastTransitionTime: '2026-02-12T04:19:38.010868Z'
-  - type: ConfigurationsReady
-    status: 'True'
-    lastTransitionTime: '2026-02-12T04:19:33.856185Z'
-  - type: RoutesReady
-    status: 'True'
-    lastTransitionTime: '2026-02-12T04:19:37.971944Z'
-  latestReadyRevisionName: snowarchive-00026-7bp
-  latestCreatedRevisionName: snowarchive-00026-7bp
-  traffic:
-  - revisionName: snowarchive-00026-7bp
-    percent: 100
-    latestRevision: true
-  url: https://snowarchive-qkqeese6ya-uc.a.run.app
-  address:
-    url: https://snowarchive-qkqeese6ya-uc.a.run.app
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - build
+      - -t
+      - us-central1-docker.pkg.dev/snowarchive-486816/cloud-run-source-deploy/snowarchive
+      - .
+
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - snowarchive
+      - --image
+      - us-central1-docker.pkg.dev/snowarchive-486816/cloud-run-source-deploy/snowarchive
+      - --region
+      - us-central1
+      - --platform
+      - managed
+      - --allow-unauthenticated
+
+images:
+  - 'us-central1-docker.pkg.dev/snowarchive-486816/cloud-run-source-deploy/snowarchive'

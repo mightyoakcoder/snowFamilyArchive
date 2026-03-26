@@ -10,17 +10,7 @@ RUN npm install
 # Copy source
 COPY . .
 
-# Build-time secrets injected by Cloud Build from Secret Manager
-ARG VITE_FIREBASE_API_KEY
-ARG VITE_FIREBASE_AUTH_DOMAIN
-ARG VITE_FIREBASE_PROJECT_ID
-ARG VITE_FIREBASE_APP_ID
-
-# Write .env so Vite can inline these values into the browser bundle
-RUN printf 'VITE_FIREBASE_API_KEY=%s\nVITE_FIREBASE_AUTH_DOMAIN=%s\nVITE_FIREBASE_PROJECT_ID=%s\nVITE_FIREBASE_APP_ID=%s\n' \
-    "$VITE_FIREBASE_API_KEY" "$VITE_FIREBASE_AUTH_DOMAIN" "$VITE_FIREBASE_PROJECT_ID" "$VITE_FIREBASE_APP_ID" > .env
-
-# Build the React app
+# Build the React app (.env is copied above via COPY . . and read by Vite)
 RUN npm run build
 
 # ---------- Runtime image ----------

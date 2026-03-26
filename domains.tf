@@ -5,7 +5,7 @@ resource "google_cloud_run_v2_service" "snowfamilyarchive" {
   
   template {
     containers {
-      image = "your-image"  # gcr.io/snowarchive-486816/snowfamilyarchive
+      image = "your-image"  # gcr.io/becky-weeks-projects/snowfamilyarchive
     }
   }
 }

@@ -151,9 +151,9 @@ const STYLES = `
 
 const NAV_ITEMS = [
   {
-    to: "/",
+    to: "/upload",
     label: "Upload",
-    end: true,   // only mark active on exact /
+    end: true,
     icon: (
       <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
         <path d="M7 9.5V3M7 3L4.5 5.5M7 3l2.5 2.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
@@ -193,9 +193,11 @@ export default function Navbar() {
   const [open, setOpen] = useState(false)
   const { user, logout } = useAuth()
 
-  const visibleNavItems = NAV_ITEMS.filter(item => 
-    item.to !== "/admin/audit" || user?.email === "mightyoakcoder@gmail.com"
-  );
+  const visibleNavItems = NAV_ITEMS.filter(item => {
+    if (item.to === "/admin/audit") return user?.email === "mightyoakcoder@gmail.com";
+    if (item.to === "/upload" || item.to === "/upload-multi") return !!user;
+    return true;
+  });
 
   return (
     <>

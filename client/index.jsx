@@ -29,7 +29,7 @@ function AdminRoute({ children }) {
   const { user, loading } = useAuth()
   if (loading) return null
   if (!user)   return <Navigate to="/login" replace />
-  if (user.email !== "mightyoakcoder@gmail.com") return <Navigate to="/" replace />
+  if (user.email !== "mightyoakcoder@gmail.com") return <Navigate to="/gallery" replace />
   return children
 }
 
@@ -45,12 +45,13 @@ function App() {
           <Route path="/login" element={
             user ? <Navigate to="/" replace /> : <LoginPage />
           } />
-          <Route path="/" element={<ImageGallery />} />
+          <Route path="/" element={<Navigate to="/gallery" replace />} />
+          <Route path="/gallery" element={<ImageGallery />} />
+          <Route path="/upload" element={
+            <ProtectedRoute><SingleFileUploader /></ProtectedRoute>
+          } />
           <Route path="/upload-multi" element={
             <ProtectedRoute><MultiFileUploader /></ProtectedRoute>
-          } />
-          <Route path="/gallery" element={
-            <ProtectedRoute><ImageGallery /></ProtectedRoute>
           } />
           <Route path="/admin/audit" element={
             <AdminRoute><AuditLog /></AdminRoute>

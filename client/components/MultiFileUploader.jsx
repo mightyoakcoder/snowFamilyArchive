@@ -622,7 +622,7 @@ function FileMetaCard({ entry, corpus, onChange, onRemove, disabled }) {
           {/* Image preview */}
           {entry.preview && (
             <div className="sfu-preview">
-              <img src={entry.preview} alt="Preview" />
+              <img src={entry.preview} alt="Preview" onError={e => { e.currentTarget.style.display = "none"; }} />
             </div>
           )}
 
@@ -940,7 +940,7 @@ export default function MultiFileUploader() {
                 ref={fileInputRef}
                 className="sfu-hidden"
                 multiple
-                onChange={e => { if (e.target.files.length) addFiles(e.target.files); e.target.value = ""; }}
+onChange={e => { if (e.target.files.length) addFiles(e.target.files); e.target.value = ""; }}
               />
 
               {/* File queue */}
@@ -957,8 +957,21 @@ export default function MultiFileUploader() {
                         style={{ maxWidth: 160, marginTop: 0 }}
                         onChange={e => setSharedDate(e.target.value)}
                       />
+                      <PeopleInput
+                        value={sharedPeople}
+                        onChange={setSharedPeople}
+                        corpus={corpus}
+                      />
+                      <input
+                        className="sfu-input"
+                        type="text"
+                        placeholder="Description…"
+                        value={sharedDesc}
+                        style={{ marginTop: 0 }}
+                        onChange={e => setSharedDesc(e.target.value)}
+                      />
                       <button className="sfu-apply-btn" onClick={applySharedToAll}>
-                        Apply date &amp; metadata →
+                        Apply to all →
                       </button>
                     </div>
                   )}
