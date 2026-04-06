@@ -10,8 +10,8 @@ steps:
           --build-arg VITE_FIREBASE_AUTH_DOMAIN="$$VITE_FIREBASE_AUTH_DOMAIN" \
           --build-arg VITE_FIREBASE_PROJECT_ID="$$VITE_FIREBASE_PROJECT_ID" \
           --build-arg VITE_FIREBASE_APP_ID="$$VITE_FIREBASE_APP_ID" \
-          -t us-central1-docker.pkg.dev/snowarchive-486816/cloud-run-source-deploy/snowarchive:$BUILD_ID \
-          -t us-central1-docker.pkg.dev/snowarchive-486816/cloud-run-source-deploy/snowarchive:latest \
+          -t us-central1-docker.pkg.dev/snowarchive-486816/cloud-run-source-deploy/snowarchive-test:$BUILD_ID \
+          -t us-central1-docker.pkg.dev/snowarchive-486816/cloud-run-source-deploy/snowarchive-test:latest \
           .
     secretEnv:
       - VITE_FIREBASE_API_KEY
@@ -24,7 +24,7 @@ steps:
     args:
       - push
       - --all-tags
-      - 'us-central1-docker.pkg.dev/snowarchive-486816/cloud-run-source-deploy/snowarchive'
+      - 'us-central1-docker.pkg.dev/snowarchive-486816/cloud-run-source-deploy/snowarchive-test'
 
   # Deploy new image to Cloud Run (preserves existing secret/env config on the service)
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
@@ -32,10 +32,13 @@ steps:
     args:
       - run
       - deploy
-      - snowarchive
-      - --image=us-central1-docker.pkg.dev/snowarchive-486816/cloud-run-source-deploy/snowarchive:$BUILD_ID
+      - snowarchive-test
+      - --image=us-central1-docker.pkg.dev/snowarchive-486816/cloud-run-source-deploy/snowarchive-test:$BUILD_ID
       - --region=us-central1
       - --platform=managed
+      - --allow-unauthenticated
+      - --min-instances=1
+      - --max-instances=5
 
 availableSecrets:
   secretManager:
@@ -49,5 +52,5 @@ availableSecrets:
       env: VITE_FIREBASE_APP_ID
 
 images:
-  - 'us-central1-docker.pkg.dev/snowarchive-486816/cloud-run-source-deploy/snowarchive:$BUILD_ID'
-  - 'us-central1-docker.pkg.dev/snowarchive-486816/cloud-run-source-deploy/snowarchive:latest'
+  - 'us-central1-docker.pkg.dev/snowarchive-486816/cloud-run-source-deploy/snowarchive-test:$BUILD_ID'
+  - 'us-central1-docker.pkg.dev/snowarchive-486816/cloud-run-source-deploy/snowarchive-test:latest'
