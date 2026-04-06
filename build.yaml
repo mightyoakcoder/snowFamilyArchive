@@ -36,6 +36,9 @@ steps:
       - --image=us-central1-docker.pkg.dev/snowarchive-486816/cloud-run-source-deploy/snowarchive:$BUILD_ID
       - --region=us-central1
       - --platform=managed
+      - --allow-unauthenticated
+      - --min-instances=1
+      - --max-instances=5
 
 availableSecrets:
   secretManager:
