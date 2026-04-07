@@ -823,7 +823,7 @@ function Lightbox({ files, index, onClose, onNav, onEdit, onDelete }) {
           <div className="gal-lb-meta">
             <div className="gal-lb-field">
               <span className="gal-lb-key">Date</span>
-              <span className={`gal-lb-val${!file.image_date ? " unknown" : ""}`}>
+              <span className={`gal-lb-val${!file.image_date ? " unknown date" : ""}`}>
                 {file.image_date || "Unknown"}
               </span>
             </div>
