@@ -194,6 +194,33 @@ app.get("/api/public/files", async (req, res) => {
 // Apply auth to all /api/ routes
 app.use("/api", requireAuth);
 
+// GET /api/families — authenticated version, includes private photos
+app.get("/api/families", async (_req, res) => {
+  try {
+    const snapshot = await db.collection(FILES_COL).get();
+    const covers = {};
+    const counts = {};
+    let unknownCount = 0;
+    snapshot.forEach(doc => {
+      const d = { ...doc.data(), id: doc.id };
+      const fams = d.families || (d.family ? [d.family] : []);
+      if (fams.length === 0) {
+        unknownCount++;
+      } else {
+        fams.forEach(f => {
+          counts[f] = (counts[f] || 0) + 1;
+          if (!covers[f]) covers[f] = d;
+        });
+      }
+    });
+    const names = Object.keys(counts).sort();
+    res.set("Cache-Control", "no-store");
+    res.json({ covers, counts, names, unknownCount });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Config ─────────────────────────────────────────────────────────────────
 const BUCKET_NAME = process.env.GCS_BUCKET_NAME || "snow-archive-photos";
 const PORT        = parseInt(process.env.PORT || "8080", 10);
@@ -474,7 +501,7 @@ app.patch("/api/files/:id", async (req, res) => {
     const doc    = await docRef.get();
     if (!doc.exists) return res.status(404).json({ error: "File not found" });
 
-    const previousValue = doc.data()[field];
+    const previousValue = doc.data()[field] ?? null;
 
     let updateValue;
     if (field === "people") {

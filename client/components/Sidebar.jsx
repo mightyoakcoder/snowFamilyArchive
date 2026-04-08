@@ -137,15 +137,21 @@ function useSidebarData() {
   const [unknownCount, setUnknownCount] = useState(0);
   const [albums,       setAlbums]       = useState([]);
 
-  useEffect(() => {
-    axios.get("/api/public/families")
-      .then(r => {
+  function fetchFamilies() {
+    const req = user ? api.get("/api/families") : axios.get("/api/public/families");
+    req.then(r => {
         setFamilies(r.data.names || []);
         setCounts(r.data.counts || {});
         setUnknownCount(r.data.unknownCount || 0);
       })
       .catch(() => {});
-  }, []);
+  }
+
+  useEffect(() => {
+    fetchFamilies();
+    window.addEventListener("familiesUpdated", fetchFamilies);
+    return () => window.removeEventListener("familiesUpdated", fetchFamilies);
+  }, [user]);
 
   useEffect(() => {
     const endpoint = user ? "/api/albums" : "/api/public/albums";

@@ -678,7 +678,8 @@ function EditModal({ file, corpus, onSave, onClose }) {
             <label className="gal-modal-label">Date</label>
             <input
               className="gal-modal-input"
-              type="date"
+              type="text"
+              placeholder="YYYY or YYYY-MM-DD"
               value={date}
               onChange={e => setDate(e.target.value)}
             />
@@ -831,7 +832,7 @@ function Lightbox({ files, index, onClose, onNav, onEdit, onDelete }) {
             <div className="gal-lb-field">
               <span className="gal-lb-key">Date</span>
               <span className={`gal-lb-val${!file.image_date ? " unknown" : ""}`}>
-                {file.image_date || "Unknown"}
+                {formatDate(file.image_date)}
               </span>
             </div>
 
@@ -908,6 +909,13 @@ function Lightbox({ files, index, onClose, onNav, onEdit, onDelete }) {
   );
 }
 
+// ── Helpers ────────────────────────────────────────────────────────────────
+function formatDate(date) {
+  if (!date) return "unknown date";
+  if (/^\d{4}$/.test(date)) return date; // year only
+  return date;
+}
+
 // ── Main component ─────────────────────────────────────────────────────────
 function familyLabel(key) {
   if (!key || key === "__unknown__") return null;
@@ -973,13 +981,18 @@ export default function ImageGallery({ albumId = null, albumName = null, familyF
       { field: "is_private",  value: String(patch.is_private ?? false) },
       { field: "families",    value: (patch.families || []).join(",") },
     ];
-    await Promise.all(updates.map(u =>
-      api.patch(`/api/files/${fileId}`, u).catch(() => {})
-    ));
+    try {
+      await Promise.all(updates.map(u => api.patch(`/api/files/${fileId}`, u)));
+    } catch (err) {
+      console.error("Save failed:", err);
+      alert("Failed to save changes. Please try again.");
+      return;
+    }
     setFiles(prev => prev.map(f =>
       f.id === fileId ? { ...f, ...patch } : f
     ));
     setEditingFile(null);
+    window.dispatchEvent(new CustomEvent("familiesUpdated"));
   }
 
   // DELETE /api/files/:id — removes from GCS + Firestore, then local state
@@ -1224,11 +1237,11 @@ export default function ImageGallery({ albumId = null, albumName = null, familyF
                     )}
                     <div className="gal-card-meta">
                       <span className={`gal-card-date${!file.image_date ? " unknown" : ""}`}>
-                        {file.image_date || "unknown"}
+                        {formatDate(file.image_date)}
                       </span>
                       {(file.people || []).length > 0 && (
                         <span className="gal-card-people">
-                          {file.people.length} person{file.people.length !== 1 ? "s" : ""}
+                          {file.people.join(", ")}
                         </span>
                       )}
                     </div>
@@ -1263,7 +1276,7 @@ export default function ImageGallery({ albumId = null, albumName = null, familyF
                     )}
                     <div className="gal-list-meta">
                       <span className={`gal-list-date${!file.image_date ? " unknown" : ""}`}>
-                        {file.image_date || "unknown"}
+                        {formatDate(file.image_date)}
                       </span>
                       {(file.people || []).length > 0 && (
                         <span className="gal-list-people">
