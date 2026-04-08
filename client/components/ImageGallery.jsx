@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useNavigate } from "react-router-dom";
+import FamilyCheckboxes from "./FamilyCheckboxes.jsx";
 import api from "../api.js";
 
 const STYLES = `
@@ -657,12 +659,13 @@ function EditModal({ file, corpus, onSave, onClose }) {
   const [date,      setDate]      = useState(file.image_date  || "");
   const [desc,      setDesc]      = useState(file.description || "");
   const [people,    setPeople]    = useState(file.people      || []);
-  const [isPrivate, setIsPrivate] = useState(file.is_private  ?? false);
+  const [isPrivate, setIsPrivate] = useState(file.is_private ?? false);
+  const [families,  setFamilies]  = useState(file.families   || (file.family ? [file.family] : []));
   const [saving,    setSaving]    = useState(false);
 
   async function handleSave() {
     setSaving(true);
-    await onSave({ image_date: date, description: desc, people, is_private: isPrivate });
+    await onSave({ image_date: date, description: desc, people, is_private: isPrivate, families });
     setSaving(false);
   }
 
@@ -675,7 +678,8 @@ function EditModal({ file, corpus, onSave, onClose }) {
             <label className="gal-modal-label">Date</label>
             <input
               className="gal-modal-input"
-              type="date"
+              type="text"
+              placeholder="YYYY or YYYY-MM-DD"
               value={date}
               onChange={e => setDate(e.target.value)}
             />
@@ -692,6 +696,10 @@ function EditModal({ file, corpus, onSave, onClose }) {
               value={desc}
               onChange={e => setDesc(e.target.value)}
             />
+          </div>
+          <div className="gal-modal-field">
+            <label className="gal-modal-label">Family</label>
+            <FamilyCheckboxes value={families} onChange={setFamilies} />
           </div>
           <div className="gal-modal-field">
             <label className="gal-modal-label">Visibility</label>
@@ -823,8 +831,8 @@ function Lightbox({ files, index, onClose, onNav, onEdit, onDelete }) {
           <div className="gal-lb-meta">
             <div className="gal-lb-field">
               <span className="gal-lb-key">Date</span>
-              <span className={`gal-lb-val${!file.image_date ? " unknown date" : ""}`}>
-                {file.image_date || "Unknown"}
+              <span className={`gal-lb-val${!file.image_date ? " unknown" : ""}`}>
+                {formatDate(file.image_date)}
               </span>
             </div>
 
@@ -901,8 +909,21 @@ function Lightbox({ files, index, onClose, onNav, onEdit, onDelete }) {
   );
 }
 
+// ── Helpers ────────────────────────────────────────────────────────────────
+function formatDate(date) {
+  if (!date) return "unknown date";
+  if (/^\d{4}$/.test(date)) return date; // year only
+  return date;
+}
+
 // ── Main component ─────────────────────────────────────────────────────────
-export default function ImageGallery() {
+function familyLabel(key) {
+  if (!key || key === "__unknown__") return null;
+  return key.replace(/\b\w/g, c => c.toUpperCase());
+}
+
+export default function ImageGallery({ albumId = null, albumName = null, familyFilter = null, embedded = false }) {
+  const navTo = useNavigate();
   const [files,       setFiles]       = useState([]);
   const [loading,     setLoading]     = useState(true);
   const [view,        setView]        = useState("grid");
@@ -928,13 +949,16 @@ export default function ImageGallery() {
 
   useEffect(() => {
     if (currentUser !== undefined) loadFiles();
-  }, [currentUser]);
+  }, [currentUser, familyFilter]);
 
   async function loadFiles() {
     setLoading(true);
     try {
       const endpoint = currentUser ? "/api/files" : "/api/public/files";
-      const res = await api.get(endpoint);
+      const params   = {};
+      if (albumId)      params.album_id = albumId;
+      if (familyFilter) params.family   = familyFilter;
+      const res = await api.get(endpoint, { params });
       const sorted = (res.data.files || []).sort((a, b) => {
         const ta = a.uploaded_at?._seconds || 0;
         const tb = b.uploaded_at?._seconds || 0;
@@ -955,14 +979,20 @@ export default function ImageGallery() {
       { field: "people",      value: peopleArrayToString(patch.people) },
       { field: "description", value: patch.description || "" },
       { field: "is_private",  value: String(patch.is_private ?? false) },
+      { field: "families",    value: (patch.families || []).join(",") },
     ];
-    await Promise.all(updates.map(u =>
-      api.patch(`/api/files/${fileId}`, u).catch(() => {})
-    ));
+    try {
+      await Promise.all(updates.map(u => api.patch(`/api/files/${fileId}`, u)));
+    } catch (err) {
+      console.error("Save failed:", err);
+      alert("Failed to save changes. Please try again.");
+      return;
+    }
     setFiles(prev => prev.map(f =>
       f.id === fileId ? { ...f, ...patch } : f
     ));
     setEditingFile(null);
+    window.dispatchEvent(new CustomEvent("familiesUpdated"));
   }
 
   // DELETE /api/files/:id — removes from GCS + Firestore, then local state
@@ -1046,11 +1076,43 @@ export default function ImageGallery() {
         <div className="gal-inner">
 
           {/* Header */}
-          <div className="gal-header">
-            <div className="gal-eyebrow">Archive</div>
-            <h1 className="gal-title">Photo Gallery</h1>
-            <p className="gal-subtitle">Browse and explore your uploaded files</p>
-          </div>
+          {!embedded && (
+            <div className="gal-header">
+              {(albumId || familyFilter) && (
+                <button
+                  onClick={() => navTo("/")}
+                  style={{ background: "none", border: "none", padding: 0, cursor: "pointer",
+                    display: "inline-flex", alignItems: "center", gap: "0.4rem",
+                    color: "var(--dim)", fontSize: "0.85rem", marginBottom: "0.75rem",
+                    fontFamily: "'Barlow', sans-serif" }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                    <path d="M9 2L4 7l5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                  Home
+                </button>
+              )}
+              <div className="gal-eyebrow">
+                {albumId ? "Album" : familyFilter ? "Family" : "Archive"}
+              </div>
+              <h1 className="gal-title">
+                {albumName || (
+                  familyFilter === "__unknown__" ? "Unknown Family"
+                  : familyFilter ? `${familyLabel(familyFilter)} Family`
+                  : "Photo Gallery"
+                )}
+              </h1>
+              <p className="gal-subtitle">
+                {albumId
+                  ? `Viewing ${albumName}`
+                  : familyFilter === "__unknown__"
+                  ? "Photos without a family tag"
+                  : familyFilter
+                  ? `Photos tagged with the ${familyLabel(familyFilter)} family`
+                  : "Browse and explore your uploaded files"}
+              </p>
+            </div>
+          )}
 
           {/* Toolbar */}
           <div className="gal-toolbar">
@@ -1175,11 +1237,11 @@ export default function ImageGallery() {
                     )}
                     <div className="gal-card-meta">
                       <span className={`gal-card-date${!file.image_date ? " unknown" : ""}`}>
-                        {file.image_date || "unknown"}
+                        {formatDate(file.image_date)}
                       </span>
                       {(file.people || []).length > 0 && (
                         <span className="gal-card-people">
-                          {file.people.length} person{file.people.length !== 1 ? "s" : ""}
+                          {file.people.join(", ")}
                         </span>
                       )}
                     </div>
@@ -1214,7 +1276,7 @@ export default function ImageGallery() {
                     )}
                     <div className="gal-list-meta">
                       <span className={`gal-list-date${!file.image_date ? " unknown" : ""}`}>
-                        {file.image_date || "unknown"}
+                        {formatDate(file.image_date)}
                       </span>
                       {(file.people || []).length > 0 && (
                         <span className="gal-list-people">

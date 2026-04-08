@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Link } from "react-router-dom";
 import api from "../api.js";
+import FamilyCheckboxes from "./FamilyCheckboxes.jsx";
 
 // ─── Field name mapping (backend uses image_date / people / description) ───
 // Upload:  FormData fields → image_date, people (comma string), description
@@ -578,6 +579,9 @@ export default function SingleFileUploader() {
   const [uploadDesc,   setUploadDesc]   = useState("");   // → description
   const [uploadPeople, setUploadPeople] = useState([]);   // → people (comma string)
   const [isPrivate,    setIsPrivate]    = useState(false);// → is_private
+  const [uploadAlbum,    setUploadAlbum]    = useState("");  // → album_id
+  const [uploadFamilies, setUploadFamilies] = useState([]); // → families
+  const [albums,       setAlbums]       = useState([]);
 
   const [currentUser,   setCurrentUser]   = useState(undefined); // undefined = loading
   const [search,        setSearch]        = useState("");
@@ -596,7 +600,10 @@ export default function SingleFileUploader() {
   }, []);
 
   useEffect(() => {
-    if (currentUser !== undefined) loadFiles();
+    if (currentUser !== undefined) {
+      loadFiles();
+      api.get("/api/albums").then(r => setAlbums(r.data.albums || [])).catch(() => {});
+    }
   }, [currentUser]);
 
   useEffect(() => () => clearInterval(progressTimer.current), []);
@@ -626,6 +633,8 @@ export default function SingleFileUploader() {
     formData.append("people",      peopleArrayToString(uploadPeople));
     formData.append("description", uploadDesc);
     formData.append("is_private",  String(isPrivate));
+    if (uploadAlbum) formData.append("album_id", uploadAlbum);
+    if (uploadFamilies.length) formData.append("families", uploadFamilies.join(","));
 
     try {
       setUploading(true);
@@ -826,6 +835,26 @@ export default function SingleFileUploader() {
                     value={uploadDesc}
                     onChange={e => setUploadDesc(e.target.value)}
                   />
+                </div>
+                {albums.length > 0 && (
+                  <div className="sfu-field">
+                    <label className="sfu-label">Album</label>
+                    <select
+                      className="sfu-input"
+                      value={uploadAlbum}
+                      onChange={e => setUploadAlbum(e.target.value)}
+                      style={{ cursor: "pointer" }}
+                    >
+                      <option value="">— No album —</option>
+                      {albums.map(a => (
+                        <option key={a.id} value={a.id}>{a.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                <div className="sfu-field">
+                  <label className="sfu-label">Family</label>
+                  <FamilyCheckboxes value={uploadFamilies} onChange={setUploadFamilies} />
                 </div>
                 <div className="sfu-field">
                   <label className="sfu-label">Visibility</label>

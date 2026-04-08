@@ -87,11 +87,71 @@ async function requireAuth(req, res, next) {
   }
 }
 
+// GET /api/public/albums — returns albums that contain at least one public photo
+app.get("/api/public/albums", async (_req, res) => {
+  try {
+    const [albumsSnap, filesSnap] = await Promise.all([
+      db.collection(ALBUMS_COL).orderBy("created_at", "desc").get(),
+      db.collection(FILES_COL).get(),
+    ]);
+
+    // Count public photos per album
+    const counts = {};
+    const covers = {};
+    filesSnap.forEach(doc => {
+      const d = doc.data();
+      if (d.is_private === true || !d.album_id) return;
+      counts[d.album_id] = (counts[d.album_id] || 0) + 1;
+      if (!covers[d.album_id]) covers[d.album_id] = d;
+    });
+
+    const albums = [];
+    albumsSnap.forEach(doc => {
+      const count = counts[doc.id] || 0;
+      if (count === 0) return; // hide empty albums from public
+      albums.push({ id: doc.id, ...doc.data(), photo_count: count, cover: covers[doc.id] || null });
+    });
+
+    res.set("Cache-Control", "no-store");
+    res.json({ albums });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/public/families — returns cover photo + count per family, plus unknown count
+app.get("/api/public/families", async (_req, res) => {
+  try {
+    const snapshot = await db.collection(FILES_COL).get();
+    const covers = {};
+    const counts = {};
+    let unknownCount = 0;
+    snapshot.forEach(doc => {
+      const d = { ...doc.data(), id: doc.id };
+      if (d.is_private === true) return;
+      const fams = d.families || (d.family ? [d.family] : []);
+      if (fams.length === 0) {
+        unknownCount++;
+      } else {
+        fams.forEach(f => {
+          counts[f] = (counts[f] || 0) + 1;
+          if (!covers[f]) covers[f] = d;
+        });
+      }
+    });
+    const names = Object.keys(counts).sort();
+    res.set("Cache-Control", "no-store");
+    res.json({ covers, counts, names, unknownCount });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/public/files — no auth required, returns only non-private files
 // Supports the same ?search=, ?person=, ?date_from=, ?date_to= filters
 app.get("/api/public/files", async (req, res) => {
   try {
-    const { search = "", person = "", date_from, date_to } = req.query;
+    const { search = "", person = "", date_from, date_to, album_id, family } = req.query;
     const snapshot = await db.collection(FILES_COL).get();
     const files = [];
 
@@ -99,6 +159,12 @@ app.get("/api/public/files", async (req, res) => {
       const data = { ...doc.data(), id: doc.id };
 
       if (data.is_private === true) return;
+      if (album_id && data.album_id !== album_id) return;
+      if (family) {
+        const fams = data.families || (data.family ? [data.family] : []);
+        if (family === "__unknown__") { if (fams.length > 0) return; }
+        else if (!fams.includes(family)) return;
+      }
 
       if (person) {
         const match = (data.people || []).some(p =>
@@ -128,6 +194,33 @@ app.get("/api/public/files", async (req, res) => {
 // Apply auth to all /api/ routes
 app.use("/api", requireAuth);
 
+// GET /api/families — authenticated version, includes private photos
+app.get("/api/families", async (_req, res) => {
+  try {
+    const snapshot = await db.collection(FILES_COL).get();
+    const covers = {};
+    const counts = {};
+    let unknownCount = 0;
+    snapshot.forEach(doc => {
+      const d = { ...doc.data(), id: doc.id };
+      const fams = d.families || (d.family ? [d.family] : []);
+      if (fams.length === 0) {
+        unknownCount++;
+      } else {
+        fams.forEach(f => {
+          counts[f] = (counts[f] || 0) + 1;
+          if (!covers[f]) covers[f] = d;
+        });
+      }
+    });
+    const names = Object.keys(counts).sort();
+    res.set("Cache-Control", "no-store");
+    res.json({ covers, counts, names, unknownCount });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Config ─────────────────────────────────────────────────────────────────
 const BUCKET_NAME = process.env.GCS_BUCKET_NAME || "snow-archive-photos";
 const PORT        = parseInt(process.env.PORT || "8080", 10);
@@ -138,8 +231,9 @@ const MAX_SIZE_MB  = 16;
 const storage  = new Storage();
 const bucket   = storage.bucket(BUCKET_NAME);
 const db       = new Firestore();
-const FILES_COL = "uploaded_files";
-const AUDIT_COL = "audit_log";
+const FILES_COL  = "uploaded_files";
+const AUDIT_COL  = "audit_log";
+const ALBUMS_COL = "albums";
 
 // ── Audit log helper ───────────────────────────────────────────────────────
 // Writes a single entry to the audit_log collection. Fire-and-forget —
@@ -220,7 +314,8 @@ app.post("/api/upload", upload.single("file"), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: "No file provided or file type not allowed" });
 
   try {
-    const { image_date = "", people = "", description = "", is_private = "false" } = req.body;
+    const { image_date = "", people = "", description = "", is_private = "false", album_id = "", families = "" } = req.body;
+    const familiesList = families ? families.split(",").map(s => s.trim()).filter(Boolean) : [];
     const peopleList    = parsePeopleString(people);
     const originalName  = req.file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_");
     const uniqueId      = uuidv4().slice(0, 8);
@@ -245,6 +340,8 @@ app.post("/api/upload", upload.single("file"), async (req, res) => {
       people:       peopleList,
       description:  description || null,
       is_private:   is_private === "true",
+      album_id:     album_id || null,
+      families:     familiesList,
     };
     await docRef.set(fileMetadata);
 
@@ -287,6 +384,9 @@ app.post("/api/uploadmulti", upload.any(), async (req, res) => {
       const people      = req.body[`people_${idx}`]      || "";
       const description = req.body[`description_${idx}`] || "";
       const is_private  = req.body[`is_private_${idx}`]  || "false";
+      const album_id    = req.body[`album_id_${idx}`]    || req.body.album_id || "";
+      const familiesRaw = req.body[`families_${idx}`]    || req.body.families || "";
+      const familiesList = familiesRaw ? familiesRaw.split(",").map(s => s.trim()).filter(Boolean) : [];
 
       const peopleList   = parsePeopleString(people);
       const originalName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_");
@@ -312,6 +412,8 @@ app.post("/api/uploadmulti", upload.any(), async (req, res) => {
           people:       peopleList,
           description:  description || null,
           is_private:   is_private === "true",
+          album_id:     album_id || null,
+          families:     familiesList,
         });
 
         const result = { success: true, filename, original_filename: originalName, url: fileUrl, doc_id: docRef.id };
@@ -340,15 +442,22 @@ app.post("/api/uploadmulti", upload.any(), async (req, res) => {
   });
 });
 
-// GET /api/files  — supports ?search=, ?person=, ?date_from=, ?date_to=
+// GET /api/files  — supports ?search=, ?person=, ?date_from=, ?date_to=, ?album_id=, ?family=
 app.get("/api/files", async (req, res) => {
   try {
-    const { search = "", person = "", date_from, date_to } = req.query;
+    const { search = "", person = "", date_from, date_to, album_id, family } = req.query;
     const snapshot = await db.collection(FILES_COL).get();
     const files = [];
 
     snapshot.forEach(doc => {
       const data = { ...doc.data(), id: doc.id };
+
+      if (album_id && data.album_id !== album_id) return;
+      if (family) {
+        const fams = data.families || (data.family ? [data.family] : []);
+        if (family === "__unknown__") { if (fams.length > 0) return; }
+        else if (!fams.includes(family)) return;
+      }
 
       // person filter (partial, case-insensitive)
       if (person) {
@@ -382,7 +491,7 @@ app.get("/api/files", async (req, res) => {
 app.patch("/api/files/:id", async (req, res) => {
   try {
     const { field, value } = req.body;
-    const ALLOWED_FIELDS = new Set(["image_date","people","description","is_private"]);
+    const ALLOWED_FIELDS = new Set(["image_date","people","description","is_private","album_id","families"]);
 
     if (!field || !ALLOWED_FIELDS.has(field)) {
       return res.status(400).json({ error: "Invalid or missing field name" });
@@ -392,11 +501,13 @@ app.patch("/api/files/:id", async (req, res) => {
     const doc    = await docRef.get();
     if (!doc.exists) return res.status(404).json({ error: "File not found" });
 
-    const previousValue = doc.data()[field];
+    const previousValue = doc.data()[field] ?? null;
 
     let updateValue;
     if (field === "people") {
       updateValue = parsePeopleString(value);
+    } else if (field === "families") {
+      updateValue = Array.isArray(value) ? value : (value ? value.split(",").map(s => s.trim()).filter(Boolean) : []);
     } else if (field === "image_date") {
       updateValue = value || null;
     } else if (field === "is_private") {
@@ -466,6 +577,94 @@ app.post("/api/files/:id/view", async (req, res) => {
       user:     req.firebaseUser,
       detail:   {},
     });
+
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Albums ─────────────────────────────────────────────────────────────────
+
+// GET /api/albums
+app.get("/api/albums", async (_req, res) => {
+  try {
+    const [albumsSnap, filesSnap] = await Promise.all([
+      db.collection(ALBUMS_COL).orderBy("created_at", "desc").get(),
+      db.collection(FILES_COL).get(),
+    ]);
+
+    const counts = {};
+    const covers = {};
+    filesSnap.forEach(doc => {
+      const d = doc.data();
+      if (!d.album_id) return;
+      counts[d.album_id] = (counts[d.album_id] || 0) + 1;
+      if (!covers[d.album_id]) covers[d.album_id] = d;
+    });
+
+    const albums = [];
+    albumsSnap.forEach(doc => {
+      albums.push({ id: doc.id, ...doc.data(), photo_count: counts[doc.id] || 0, cover: covers[doc.id] || null });
+    });
+
+    res.json({ albums });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/albums
+app.post("/api/albums", async (req, res) => {
+  try {
+    const { name, description = "" } = req.body;
+    if (!name?.trim()) return res.status(400).json({ error: "Album name is required" });
+
+    const docRef = db.collection(ALBUMS_COL).doc();
+    await docRef.set({
+      name: name.trim(),
+      description,
+      created_at: Firestore.Timestamp.now(),
+    });
+
+    res.json({ success: true, id: docRef.id, name: name.trim(), description });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PATCH /api/albums/:id
+app.patch("/api/albums/:id", async (req, res) => {
+  try {
+    const { name, description } = req.body;
+    const docRef = db.collection(ALBUMS_COL).doc(req.params.id);
+    const doc = await docRef.get();
+    if (!doc.exists) return res.status(404).json({ error: "Album not found" });
+
+    const update = {};
+    if (name !== undefined)        update.name        = name.trim();
+    if (description !== undefined) update.description = description;
+
+    await docRef.update(update);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/albums/:id
+app.delete("/api/albums/:id", async (req, res) => {
+  try {
+    const docRef = db.collection(ALBUMS_COL).doc(req.params.id);
+    const doc = await docRef.get();
+    if (!doc.exists) return res.status(404).json({ error: "Album not found" });
+
+    // Unassign all photos in this album
+    const filesSnap = await db.collection(FILES_COL).where("album_id", "==", req.params.id).get();
+    const batch = db.batch();
+    filesSnap.forEach(d => batch.update(d.ref, { album_id: null }));
+    batch.delete(docRef);
+    await batch.commit();
 
     res.json({ success: true });
   } catch (err) {

@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import api from "../api.js";
+import FamilyCheckboxes from "./FamilyCheckboxes.jsx";
 
 // ─── Field name mapping (backend uses image_date / people / description) ───
 // Upload:  FormData fields → image_date, people (comma string), description
@@ -578,7 +579,7 @@ function EditModal({ file, corpus, onSave, onClose }) {
 
 // ── File metadata card ─────────────────────────────────────────────────────
 // Renders the collapsible per-file card in the pending queue
-function FileMetaCard({ entry, corpus, onChange, onRemove, disabled }) {
+function FileMetaCard({ entry, corpus, albums = [], onChange, onRemove, disabled }) {
   const [open, setOpen] = useState(true);
 
   return (
@@ -669,6 +670,28 @@ function FileMetaCard({ entry, corpus, onChange, onRemove, disabled }) {
               <label className="sfu-label">Visibility</label>
               <PrivacyToggle value={entry.isPrivate} onChange={val => onChange({ isPrivate: val })} />
             </div>
+            <div className="sfu-field">
+              <label className="sfu-label">Family</label>
+              <FamilyCheckboxes
+                value={entry.families || []}
+                onChange={families => onChange({ families })}
+                disabled={disabled}
+              />
+            </div>
+            {albums.length > 0 && (
+              <div className="sfu-field">
+                <label className="sfu-label">Album</label>
+                <select
+                  className="sfu-input"
+                  value={entry.albumId || ""}
+                  disabled={disabled}
+                  onChange={e => onChange({ albumId: e.target.value })}
+                >
+                  <option value="">— No album —</option>
+                  {albums.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                </select>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -696,6 +719,11 @@ export default function MultiFileUploader() {
   const [sharedDate,   setSharedDate]   = useState("");
   const [sharedPeople, setSharedPeople] = useState([]);
   const [sharedDesc,   setSharedDesc]   = useState("");
+  const [sharedAlbum,    setSharedAlbum]    = useState("");
+  const [sharedFamilies, setSharedFamilies] = useState([]);
+
+  // Albums list
+  const [albums,       setAlbums]       = useState([]);
 
   // Uploaded files list
   const [files,        setFiles]        = useState([]);
@@ -708,7 +736,12 @@ export default function MultiFileUploader() {
   useEffect(() => {
     import("firebase/auth").then(({ getAuth, onAuthStateChanged }) => {
       const auth = getAuth();
-      const unsub = onAuthStateChanged(auth, user => setCurrentUser(user ?? null));
+      const unsub = onAuthStateChanged(auth, user => {
+        setCurrentUser(user ?? null);
+        if (user) {
+          api.get("/api/albums").then(r => setAlbums(r.data.albums || [])).catch(() => {});
+        }
+      });
       return unsub;
     }).catch(() => setCurrentUser(null));
   }, []);
@@ -729,6 +762,8 @@ export default function MultiFileUploader() {
       date:      "",
       people:    [],
       desc:      "",
+      albumId:   "",
+      families:  [],
       isPrivate: false,
       status:    "pending",
       progress:  0,
@@ -761,9 +796,11 @@ export default function MultiFileUploader() {
       if (e.status !== "pending") return e;
       return {
         ...e,
-        date:   sharedDate   || e.date,
-        people: sharedPeople.length ? sharedPeople : e.people,
-        desc:   sharedDesc   || e.desc,
+        date:    sharedDate   || e.date,
+        people:  sharedPeople.length ? sharedPeople : e.people,
+        desc:    sharedDesc   || e.desc,
+        albumId:  sharedAlbum                    || e.albumId,
+        families: sharedFamilies.length ? sharedFamilies : e.families,
       };
     }));
   }
@@ -786,6 +823,8 @@ export default function MultiFileUploader() {
       formData.append("people",      peopleArrayToString(entry.people));
       formData.append("description", entry.desc);
       formData.append("is_private",  String(entry.isPrivate));
+      if (entry.albumId)          formData.append("album_id", entry.albumId);
+      if (entry.families?.length) formData.append("families", entry.families.join(","));
 
       try {
         await api.post("/api/upload", formData, {
@@ -970,6 +1009,18 @@ onChange={e => { if (e.target.files.length) addFiles(e.target.files); e.target.v
                         style={{ marginTop: 0 }}
                         onChange={e => setSharedDesc(e.target.value)}
                       />
+                      <FamilyCheckboxes value={sharedFamilies} onChange={setSharedFamilies} />
+                      {albums.length > 0 && (
+                        <select
+                          className="sfu-input"
+                          value={sharedAlbum}
+                          style={{ marginTop: 0 }}
+                          onChange={e => setSharedAlbum(e.target.value)}
+                        >
+                          <option value="">— No album —</option>
+                          {albums.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                        </select>
+                      )}
                       <button className="sfu-apply-btn" onClick={applySharedToAll}>
                         Apply to all →
                       </button>
@@ -982,6 +1033,7 @@ onChange={e => { if (e.target.files.length) addFiles(e.target.files); e.target.v
                         key={entry.id}
                         entry={entry}
                         corpus={corpus}
+                        albums={albums}
                         disabled={uploading}
                         onChange={patch => updateEntry(entry.id, patch)}
                         onRemove={() => removeFromQueue(entry.id)}

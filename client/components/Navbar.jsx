@@ -151,19 +151,18 @@ const STYLES = `
 
 const NAV_ITEMS = [
   {
-    to: "/upload",
-    label: "Upload",
+    to: "/",
+    label: "Home",
     end: true,
     icon: (
       <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-        <path d="M7 9.5V3M7 3L4.5 5.5M7 3l2.5 2.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
-        <path d="M2 11h10" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+        <path d="M1.5 6.5L7 1.5l5.5 5V12a.5.5 0 0 1-.5.5H9V9H5v3.5H2a.5.5 0 0 1-.5-.5V6.5Z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"/>
       </svg>
     ),
   },
   {
     to: "/gallery",
-    label: "Gallery",
+    label: "All Photos",
     end: false,
     icon: (
       <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
@@ -171,6 +170,17 @@ const NAV_ITEMS = [
         <rect x="8" y="1" width="5" height="5" rx="1.5" stroke="currentColor" strokeWidth="1.3"/>
         <rect x="1" y="8" width="5" height="5" rx="1.5" stroke="currentColor" strokeWidth="1.3"/>
         <rect x="8" y="8" width="5" height="5" rx="1.5" stroke="currentColor" strokeWidth="1.3"/>
+      </svg>
+    ),
+  },
+  {
+    to: "/upload",
+    label: "Upload",
+    end: true,
+    icon: (
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+        <path d="M7 9.5V3M7 3L4.5 5.5M7 3l2.5 2.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+        <path d="M2 11h10" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
       </svg>
     ),
   },
