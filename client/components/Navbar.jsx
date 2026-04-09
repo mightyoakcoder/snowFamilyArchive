@@ -136,13 +136,16 @@ const STYLES = `
     max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
   .nav-signout {
-    background: none; border: 1px solid var(--border2); border-radius: 7px;
-    padding: 0.3rem 0.65rem; color: var(--text2); cursor: pointer;
-    font-family: 'Barlow', sans-serif; font-size: 1rem; font-weight: 500;
-    transition: border-color 0.15s, color 0.15s;
-    white-space: nowrap;
+    display: inline-flex; align-items: center; gap: 0.4rem;
+    background: rgba(123,140,255,0.12); border: 1px solid rgba(123,140,255,0.3);
+    border-radius: 8px; padding: 0.35rem 0.85rem; color: #a5b0ff; cursor: pointer;
+    font-family: 'Barlow', sans-serif; font-size: 0.85rem; font-weight: 600;
+    text-decoration: none; white-space: nowrap;
+    transition: background 0.2s, border-color 0.2s, color 0.2s;
   }
-  .nav-signout:hover { border-color: rgba(123,140,255,0.5); color: #a5b0ff; }
+  .nav-signout:hover {
+    background: rgba(123,140,255,0.22); border-color: rgba(123,140,255,0.55); color: #c4ccff;
+  }
 
   @media (max-width: 540px) {
     .nav-user-email { display: none; }
