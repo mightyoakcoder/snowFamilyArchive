@@ -142,7 +142,7 @@ const STYLES = `
     transition: border-color 0.15s, color 0.15s;
     white-space: nowrap;
   }
-  .nav-signout:hover { border-color: var(--error); color: var(--error); }
+  .nav-signout:hover { border-color: rgba(123,140,255,0.5); color: #a5b0ff; }
 
   @media (max-width: 540px) {
     .nav-user-email { display: none; }

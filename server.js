@@ -147,6 +147,38 @@ app.get("/api/public/families", async (_req, res) => {
   }
 });
 
+// GET /api/public/splash — random sample of public images for the landing page
+// Prefers photos that have people tagged; returns up to 10 IDs
+app.get("/api/public/splash", async (_req, res) => {
+  try {
+    const IMAGE_EXT = new Set(["jpg","jpeg","png","gif","webp"]);
+    const isImg = d => IMAGE_EXT.has((d.original_filename || d.filename || "").split(".").pop().toLowerCase());
+
+    const snapshot = await db.collection(FILES_COL).get();
+    const withPeople = [];
+    const noPeople   = [];
+
+    snapshot.forEach(doc => {
+      const d = { ...doc.data(), id: doc.id };
+      if (d.is_private === true) return;
+      if (!isImg(d)) return;
+      const people = Array.isArray(d.people) ? d.people : (d.people ? d.people.split(",").map(s => s.trim()).filter(Boolean) : []);
+      (people.length > 0 ? withPeople : noPeople).push({ ...d, people });
+    });
+
+    const shuffle = a => a.sort(() => Math.random() - 0.5);
+    // Prefer tagged photos; only fall back to untagged if fewer than 6 tagged exist
+    const pool = withPeople.length >= 6
+      ? shuffle(withPeople)
+      : [...shuffle(withPeople), ...shuffle(noPeople)];
+    const files = pool.slice(0, 18);
+    res.set("Cache-Control", "no-store");
+    res.json({ files });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/public/files — no auth required, returns only non-private files
 // Supports the same ?search=, ?person=, ?date_from=, ?date_to= filters
 app.get("/api/public/files", async (req, res) => {

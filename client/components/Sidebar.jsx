@@ -167,16 +167,16 @@ function useNav() {
   const location = useLocation();
   const [searchParams] = useSearchParams();
 
-  const onGallery = location.pathname === "/" || location.pathname === "/gallery";
+  const onGallery = location.pathname === "/gallery";
   const activeFamily = onGallery ? (searchParams.get("family")   || null) : null;
   const activeAlbum  = onGallery ? (searchParams.get("album_id") || null) : null;
   const isAll = onGallery && !activeFamily && !activeAlbum;
 
   return {
     isAll, activeFamily, activeAlbum,
-    goAll:    ()    => navigate("/"),
-    goFamily: (key) => navigate(`/?family=${key}`),
-    goAlbum:  (id)  => navigate(`/?album_id=${id}`),
+    goAll:    ()    => navigate("/gallery"),
+    goFamily: (key) => navigate(`/gallery?family=${key}`),
+    goAlbum:  (id)  => navigate(`/gallery?album_id=${id}`),
   };
 }
 
