@@ -63,7 +63,7 @@ const STYLES = `
     font-family: 'Barlow', sans-serif;
     font-size: 0.95rem;
     font-weight: 400;
-    color: rgba(255,255,255,0.38);
+    color: rgba(255, 255, 255, 0.62);
     line-height: 1.7;
     max-width: 475px;
     margin-bottom: 2.5rem;
@@ -304,7 +304,7 @@ const STYLES = `
       padding: 2.5rem 1.75rem 10rem;
       background: linear-gradient(
         to top,
-        rgba(13,14,17,0.97) 50%,
+        rgba(13,14,17,0.97) 20%,
         rgba(13,14,17,0.6)  80%,
         rgba(13,14,17,0.2)  90%,
         transparent 100%
