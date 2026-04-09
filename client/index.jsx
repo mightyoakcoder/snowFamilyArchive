@@ -14,6 +14,7 @@ const SingleFileUploader = lazy(() => import("./components/SingleFileUploader.js
 const MultiFileUploader  = lazy(() => import("./components/MultiFileUploader.jsx"))
 const ImageGallery       = lazy(() => import("./components/ImageGallery.jsx"))
 const AuditLog           = lazy(() => import("./components/AuditLog.jsx"))
+const LandingPage        = lazy(() => import("./components/LandingPage.jsx"))
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
@@ -26,7 +27,7 @@ function AdminRoute({ children }) {
   const { user, loading } = useAuth()
   if (loading) return null
   if (!user)   return <Navigate to="/login" replace />
-  if (user.email !== "mightyoakcoder@gmail.com") return <Navigate to="/" replace />
+  if (user.email !== "mightyoakcoder@gmail.com") return <Navigate to="/gallery" replace />
   return children
 }
 
@@ -68,10 +69,10 @@ function App() {
           <Suspense fallback={null}>
             <Routes>
               <Route path="/login" element={
-                user ? <Navigate to="/" replace /> : <LoginPage />
+                user ? <Navigate to="/gallery" replace /> : <LoginPage />
               } />
-              <Route path="/"       element={<GalleryPage />} />
-              <Route path="/gallery" element={<Navigate to="/" replace />} />
+              <Route path="/"        element={<LandingPage />} />
+              <Route path="/gallery" element={<GalleryPage />} />
               <Route path="/upload" element={
                 <ProtectedRoute><SingleFileUploader /></ProtectedRoute>
               } />

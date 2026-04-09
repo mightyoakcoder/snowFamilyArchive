@@ -718,7 +718,7 @@ function EditModal({ file, corpus, onSave, onClose }) {
 }
 
 // ── Lightbox ──────────────────────────────────────────────────────────────
-function Lightbox({ files, index, onClose, onNav, onEdit, onDelete }) {
+function Lightbox({ files, index, onClose, onNav, onEdit, onDelete, canEdit }) {
   const file = files[index];
   const [confirming, setConfirming] = useState(false);
   const [deleting,   setDeleting]   = useState(false);
@@ -886,20 +886,22 @@ function Lightbox({ files, index, onClose, onNav, onEdit, onDelete }) {
             ) : (
               <>
                 <span>{index + 1} / {files.length}</span>
-                <div style={{ display: "flex", gap: "0.4rem" }}>
-                  <button className="gal-lb-edit-btn" onClick={() => onEdit(file)}>
-                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                      <path d="M8.5 1.5l2 2L3.5 11H1.5V9L8.5 1.5z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"/>
-                    </svg>
-                    Edit
-                  </button>
-                  <button className="gal-lb-delete-btn" onClick={() => setConfirming(true)}>
-                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                      <path d="M2 3.5h8M4.5 3.5V2.5h3v1M5 5.5v3.5M7 5.5v3.5M2.5 3.5l.75 6.5h5.5l.75-6.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
-                    Delete
-                  </button>
-                </div>
+                {canEdit && (
+                  <div style={{ display: "flex", gap: "0.4rem" }}>
+                    <button className="gal-lb-edit-btn" onClick={() => onEdit(file)}>
+                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                        <path d="M8.5 1.5l2 2L3.5 11H1.5V9L8.5 1.5z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"/>
+                      </svg>
+                      Edit
+                    </button>
+                    <button className="gal-lb-delete-btn" onClick={() => setConfirming(true)}>
+                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                        <path d="M2 3.5h8M4.5 3.5V2.5h3v1M5 5.5v3.5M7 5.5v3.5M2.5 3.5l.75 6.5h5.5l.75-6.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                      Delete
+                    </button>
+                  </div>
+                )}
               </>
             )}
           </div>
@@ -1060,6 +1062,7 @@ export default function ImageGallery({ albumId = null, albumName = null, familyF
           onNav={navigate}
           onEdit={file => setEditingFile(file)}
           onDelete={deleteFile}
+          canEdit={!!currentUser}
         />
       )}
 
