@@ -301,12 +301,12 @@ const STYLES = `
       flex: 1;
       max-width: 100%;
       justify-content: flex-end;
-      padding: 2.5rem 1.75rem 5rem;
+      padding: 2.5rem 1.75rem 10rem;
       background: linear-gradient(
         to top,
-        rgba(13,14,17,0.97) 0%,
-        rgba(13,14,17,0.82) 40%,
-        rgba(13,14,17,0.3)  75%,
+        rgba(13,14,17,0.97) 50%,
+        rgba(13,14,17,0.6)  80%,
+        rgba(13,14,17,0.2)  90%,
         transparent 100%
       );
     }
