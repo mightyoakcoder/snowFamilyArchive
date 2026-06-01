@@ -138,6 +138,7 @@ create_or_skip_secret "VITE_FIREBASE_API_KEY"
 create_or_skip_secret "VITE_FIREBASE_AUTH_DOMAIN"
 create_or_skip_secret "VITE_FIREBASE_PROJECT_ID"
 create_or_skip_secret "VITE_FIREBASE_APP_ID"
+create_or_skip_secret "VITE_ADMIN_UID"
 
 # GCS_BUCKET_NAME is always synced to match the bucket we created/verified above
 create_or_update_secret "GCS_BUCKET_NAME" "$BUCKET_NAME"
@@ -145,7 +146,7 @@ create_or_update_secret "GCS_BUCKET_NAME" "$BUCKET_NAME"
 # ── Build and deploy via Cloud Build ─────────────────────────────────────────
 echo -e "\n${YELLOW}Building and deploying via Cloud Build...${NC}"
 gcloud builds submit \
-  --config cloudbuild.yaml \
+  --config build.yaml \
   --substitutions="_REGION=${REGION},_SERVICE_NAME=${SERVICE_NAME}" \
   --project="$PROJECT_ID"
 

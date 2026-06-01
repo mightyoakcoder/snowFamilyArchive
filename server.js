@@ -60,7 +60,7 @@ app.use((req, _res, next) => {
 
   // Fire-and-forget so geo lookup doesn't slow the response
   getGeoInfo(ip).then((geo) => {
-    console.log(JSON.stringify({
+    console.info(JSON.stringify({
       event: 'visit',
       timestamp: new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }),
       ip,
@@ -74,6 +74,16 @@ app.use((req, _res, next) => {
   next();
 });
 
+//only my UID can access the audit panel
+const VITE_ADMIN_UID = process.env.VITE_ADMIN_UID;
+
+function requireAdmin(req, res, next) {
+  if (req.firebaseUser?.uid !== VITE_ADMIN_UID) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+  next();
+}
+
 // Middleware — verifies the Firebase ID token on every /api/ route
 async function requireAuth(req, res, next) {
   const header = req.headers.authorization || "";
@@ -81,6 +91,7 @@ async function requireAuth(req, res, next) {
   if (!token) return res.status(401).json({ error: "Unauthorized" });
   try {
     req.firebaseUser = await admin.auth().verifyIdToken(token);
+
     next();
   } catch {
     res.status(401).json({ error: "Invalid or expired token" });
@@ -706,7 +717,7 @@ app.delete("/api/albums/:id", async (req, res) => {
 
 // GET /api/audit — returns audit log entries, newest first
 // Supports ?file_id=, ?action=, ?limit= (default 200)
-app.get("/api/audit", async (req, res) => {
+app.get("/api/audit", requireAdmin, async (req, res) => {
   try {
     const { file_id, action, limit = "200" } = req.query;
     const maxResults = Math.min(parseInt(limit, 10) || 200, 500);

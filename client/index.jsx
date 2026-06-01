@@ -24,10 +24,12 @@ function ProtectedRoute({ children }) {
 }
 
 function AdminRoute({ children }) {
+  const VITE_ADMIN_UID = import.meta.env.VITE_ADMIN_UID;
+  
   const { user, loading } = useAuth()
   if (loading) return null
   if (!user)   return <Navigate to="/login" replace />
-  if (user.email !== "mightyoakcoder@gmail.com") return <Navigate to="/gallery" replace />
+  if (user.uid !== VITE_ADMIN_UID) return <Navigate to="/gallery" replace />
   return children
 }
 

@@ -889,7 +889,15 @@ export default function MultiFileUploader() {
       const endpoint = currentUser ? "/api/files" : "/api/public/files";
       const res = await api.get(endpoint);
       setFiles(res.data.files || []);
-    } catch {}
+    } catch (err) {
+      const status = err.response?.status;
+      if (status >= 400 && status < 500) {
+        setMessage({ type: "error", text: err.response?.data?.error || "Could not load files." });
+      } else {
+        setMessage({ type: "error", text: "Could not load files. Try refreshing." });
+        console.error(err.response?.data?.error || err.message);
+      }
+    }
   }
 
   // ── Save edits ───────────────────────────────────────────────────────────
@@ -901,22 +909,42 @@ export default function MultiFileUploader() {
       { field: "is_private",  value: String(patch.is_private ?? false) },
     ];
     try {
-      await Promise.all(updates.map(u => api.patch(`/api/files/${fileId}`, u).catch(() => {})));
-    } catch {}
-    setFiles(prev => prev.map(f =>
-      f.id === fileId
-        ? { ...f, image_date: patch.image_date, people: patch.people, description: patch.description, is_private: patch.is_private }
-        : f
-    ));
-    setEditingFile(null);
+      await Promise.all(updates.map(u => api.patch(`/api/files/${fileId}`, u)));
+      setFiles(prev => prev.map(f =>
+        f.id === fileId
+          ? { ...f, image_date: patch.image_date, people: patch.people, description: patch.description, is_private: patch.is_private }
+          : f
+      ));
+      setEditingFile(null);
+    } catch (err) {
+      const status = err.response?.status;
+      if (status >= 400 && status < 500) {
+        setMessage({ type: "error", text: err.response?.data?.error || "Could not save changes." });
+      } else {
+        setMessage({ type: "error", text: "Something went wrong. Try again later." });
+        console.error(err.response?.data?.error || err.message);
+      }
+      setEditingFile(null);
+    }
   }
 
   // ── Delete ───────────────────────────────────────────────────────────────
   async function deleteFile(fileId) {
-    try { await api.delete(`/api/files/${fileId}`); } catch {}
-    setFiles(prev => prev.filter(f => f.id !== fileId));
-    setConfirmDelete(null);
-    if (expanded === fileId) setExpanded(null);
+    try {
+      await api.delete(`/api/files/${fileId}`);
+      setFiles(prev => prev.filter(f => f.id !== fileId));
+      setConfirmDelete(null);
+      if (expanded === fileId) setExpanded(null);
+    } catch (err) {
+      const status = err.response?.status;
+      if (status >= 400 && status < 500) {
+        setMessage({ type: "error", text: err.response?.data?.error || "Could not delete file." });
+      } else {
+        setMessage({ type: "error", text: "Something went wrong. Try again later." });
+        console.error(err.response?.data?.error || err.message);
+      }
+      setConfirmDelete(null);
+    }
   }
 
   // ── Filter ───────────────────────────────────────────────────────────────

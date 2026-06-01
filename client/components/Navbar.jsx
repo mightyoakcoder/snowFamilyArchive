@@ -207,7 +207,8 @@ export default function Navbar() {
   const { user, logout } = useAuth()
 
   const visibleNavItems = NAV_ITEMS.filter(item => {
-    if (item.to === "/admin/audit") return user?.email === "mightyoakcoder@gmail.com";
+    const VITE_ADMIN_UID = import.meta.env.VITE_ADMIN_UID;
+    if (item.to === "/admin/audit") return user?.uid === VITE_ADMIN_UID;
     if (item.to === "/upload" || item.to === "/upload-multi") return !!user;
     return true;
   });

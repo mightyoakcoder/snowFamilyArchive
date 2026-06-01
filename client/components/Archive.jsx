@@ -206,13 +206,19 @@ export default function Archive() {
   useEffect(() => {
     axios.get("/api/public/families")
       .then(r => setFamilyCounts(r.data.counts || {}))
-      .catch(() => {});
+      .catch(err => {
+        if (!err.response || err.response.status >= 500) console.error("Failed to load families:", err.response?.data?.error || err.message);
+      });
   }, []);
 
   useEffect(() => {
     const endpoint = user ? "/api/albums" : "/api/public/albums";
     const fetch = user ? api.get(endpoint) : axios.get(endpoint);
-    fetch.then(r => setAlbums(r.data.albums || [])).catch(() => {});
+    fetch
+      .then(r => setAlbums(r.data.albums || []))
+      .catch(err => {
+        if (!err.response || err.response.status >= 500) console.error("Failed to load albums:", err.response?.data?.error || err.message);
+      });
   }, [user]);
 
   function selectAll()         { setSelectedFamily(null); setSelectedAlbum(null); setSelectedAlbumName(null); }

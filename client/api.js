@@ -14,4 +14,22 @@ api.interceptors.request.use(async (config) => {
   return config;
 });
 
+api.interceptors.response.use(
+  res => res,
+  async err => {
+    if (err.response?.status === 401 && !err.config._retried) {
+      err.config._retried = true;
+      try {
+        const token = await auth.currentUser?.getIdToken(true);
+        if (token) {
+          err.config.headers.Authorization = `Bearer ${token}`;
+          return api(err.config);
+        }
+      } catch {}
+      await auth.signOut();
+    }
+    return Promise.reject(err);
+  }
+);
+
 export default api;

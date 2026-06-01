@@ -191,7 +191,8 @@ export default function Albums() {
   const navigate    = useNavigate();
   const { user }    = useAuth();
   const queryClient = useQueryClient();
-  const isAdmin     = user?.email === "mightyoakcoder@gmail.com";
+  const VITE_ADMIN_UID = import.meta.env.VITE_ADMIN_UID;
+  const isAdmin     = user?.uid !== VITE_ADMIN_UID;
 
   const [modal, setModal]   = useState(null); // null | "create" | { id, name, description }
   const [form, setForm]     = useState({ name: "", description: "" });
