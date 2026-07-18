@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.snowarchive.photowatcher</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/python3</string>
+        <string>/Users/mauransnow/code/snowFamilyArchive/watcher/photo_watcher.py</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/mauransnow/code/snowFamilyArchive/watcher</string>
+
+    <!-- Starts on login and restarts automatically if it ever crashes -->
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>/Users/mauransnow/code/snowFamilyArchive/watcher/watcher.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/mauransnow/code/snowFamilyArchive/watcher/watcher.error.log</string>
+</dict>
+</plist>

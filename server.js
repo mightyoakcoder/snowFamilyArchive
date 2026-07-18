@@ -409,6 +409,72 @@ app.post("/api/upload", upload.single("file"), async (req, res) => {
   }
 });
 
+// ── Watcher upload ───────────────────────────────────────────────────────
+// Called by an unattended local script (not a logged-in browser), so it
+// can't carry a Firebase ID token. Deliberately NOT under /api — that prefix
+// has requireAuth applied to it a few lines up — so this route needs its own
+// gate instead: a shared secret set in WATCHER_API_KEY.
+function requireWatcherKey(req, res, next) {
+  const key = req.headers["x-watcher-key"];
+  if (!process.env.WATCHER_API_KEY || key !== process.env.WATCHER_API_KEY) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  next();
+}
+
+// POST /watcher/upload — always lands as a private draft (is_private: true),
+// with people/description left blank. It's meant to be found later via the
+// "Needs labeling" filter in the gallery and finished off with the normal
+// edit form — never auto-published.
+app.post("/watcher/upload", requireWatcherKey, upload.single("file"), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: "No file provided or file type not allowed" });
+
+  try {
+    const { image_date = "" } = req.body; // optional EXIF-derived date; blank is fine, means "unknown"
+    const originalName = req.file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const uniqueId      = uuidv4().slice(0, 8);
+    const filename      = `${timestamp()}_${uniqueId}_${originalName}`;
+    const contentType   = req.file.mimetype || "application/octet-stream";
+
+    await uploadToGCS(req.file.buffer, filename, contentType);
+
+    const blob    = bucket.file(filename);
+    const [meta]  = await blob.getMetadata();
+    const fileUrl = `https://storage.googleapis.com/${BUCKET_NAME}/${filename}`;
+
+    const docRef = db.collection(FILES_COL).doc();
+    const fileMetadata = {
+      filename,
+      original_filename: originalName,
+      url:          fileUrl,
+      content_type: contentType,
+      size:         parseInt(meta.size, 10),
+      uploaded_at:  Firestore.Timestamp.now(),
+      image_date:   image_date || null,
+      people:       [],
+      description:  null,
+      is_private:   true,
+      album_id:     null,
+      families:     [],
+      source:       "watcher",
+    };
+    await docRef.set(fileMetadata);
+
+    writeAuditLog({
+      action:   "upload",
+      fileId:   docRef.id,
+      filename: originalName,
+      user:     null,
+      detail:   { size: fileMetadata.size, source: "watcher" },
+    });
+
+    res.json({ success: true, doc_id: docRef.id, filename, url: fileUrl });
+  } catch (err) {
+    console.error("Watcher upload error:", err);
+    res.status(500).json({ error: `Upload failed: ${err.message}` });
+  }
+});
+
 // POST /api/uploadmulti — accepts up to 20 files, each with its own metadata
 // FormData fields per file (indexed): file_0, image_date_0, people_0, description_0, is_private_0 …
 app.post("/api/uploadmulti", upload.any(), async (req, res) => {

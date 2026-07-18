@@ -36,9 +36,10 @@ function AdminRoute({ children }) {
 // Gallery reads family/album from URL params
 function GalleryPage() {
   const [searchParams] = useSearchParams()
-  const family  = searchParams.get("family")  || null
-  const albumId = searchParams.get("album_id") || null
-  return <ImageGallery familyFilter={family} albumId={albumId} embedded />
+  const family     = searchParams.get("family")     || null
+  const albumId    = searchParams.get("album_id")   || null
+  const needsLabel = searchParams.get("needsLabel") === "true"
+  return <ImageGallery familyFilter={family} albumId={albumId} needsLabelDefault={needsLabel} embedded />
 }
 
 const SHELL_STYLES = `

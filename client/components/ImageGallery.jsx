@@ -924,7 +924,7 @@ function familyLabel(key) {
   return key.replace(/\b\w/g, c => c.toUpperCase());
 }
 
-export default function ImageGallery({ albumId = null, albumName = null, familyFilter = null, embedded = false }) {
+export default function ImageGallery({ albumId = null, albumName = null, familyFilter = null, needsLabelDefault = false, embedded = false }) {
   const navTo = useNavigate();
   const [files,       setFiles]       = useState([]);
   const [loading,     setLoading]     = useState(true);
@@ -937,8 +937,9 @@ export default function ImageGallery({ albumId = null, albumName = null, familyF
   const [lightboxIdx,    setLightboxIdx]     = useState(null);
   const [editingFile,    setEditingFile]     = useState(null);
   const [currentUser,    setCurrentUser]     = useState(undefined);
+  const [needsLabelOnly, setNeedsLabelOnly]  = useState(needsLabelDefault);
 
-  const hasFilters = filterPerson || filterDateFrom || filterDateTo;
+  const hasFilters = filterPerson || filterDateFrom || filterDateTo || needsLabelOnly;
   const corpus = buildCorpus(files);
 
   useEffect(() => {
@@ -1026,11 +1027,12 @@ export default function ImageGallery({ albumId = null, albumName = null, familyF
     }
     if (filterDateFrom && f.image_date && f.image_date < filterDateFrom) return false;
     if (filterDateTo   && f.image_date && f.image_date > filterDateTo)   return false;
+    if (needsLabelOnly && !(f.is_private && !f.image_date)) return false;
     return true;
   });
 
   function clearFilters() {
-    setSearch(""); setFilterPerson(""); setFilterDateFrom(""); setFilterDateTo("");
+    setSearch(""); setFilterPerson(""); setFilterDateFrom(""); setFilterDateTo(""); setNeedsLabelOnly(false);
   }
 
   const openLightbox = useCallback((idx) => {
@@ -1189,6 +1191,18 @@ export default function ImageGallery({ albumId = null, albumName = null, familyF
                   onChange={e => setFilterDateTo(e.target.value)}
                 />
               </div>
+              {currentUser && (
+                <div className="gal-filter-field">
+                  <label className="gal-filter-label" style={{ display: "flex", alignItems: "center", gap: "0.4rem", cursor: "pointer" }}>
+                    <input
+                      type="checkbox"
+                      checked={needsLabelOnly}
+                      onChange={e => setNeedsLabelOnly(e.target.checked)}
+                    />
+                    Needs labeling
+                  </label>
+                </div>
+              )}
             </div>
           )}
 

@@ -134,6 +134,7 @@ create_or_update_secret() {
     fi
 }
 
+create_or_skip_secret "WATCHER_API_KEY"
 create_or_skip_secret "VITE_FIREBASE_API_KEY"
 create_or_skip_secret "VITE_FIREBASE_AUTH_DOMAIN"
 create_or_skip_secret "VITE_FIREBASE_PROJECT_ID"

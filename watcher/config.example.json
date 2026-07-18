@@ -1,0 +1,8 @@
+{
+  "watch_dir": "/Users/mauransnow/Pictures/ToUpload",
+  "site_url": "https://your-site-domain.com",
+  "watcher_api_key": "paste-the-WATCHER_API_KEY-secret-value-here",
+  "gmail_address": "mightyoakcoder@gmail.com",
+  "gmail_app_password": "paste-a-16-char-gmail-app-password-here",
+  "notify_to": "mightyoakcoder@gmail.com"
+}
