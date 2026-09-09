@@ -1,7 +1,14 @@
 {
   "permissions": {
     "allow": [
-      "WebFetch(domain:www.cadence.care)"
+      "WebFetch(domain:www.cadence.care)",
+      "Bash(rm -rf /Users/mauransnow/code/snowFamilyArchive/watcher)",
+      "Bash(node --check server.js)",
+      "Bash(curl -s http://localhost:8080/api/public/files)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:8080/api/public/files)"
+    ],
+    "additionalDirectories": [
+      "/Users/mauransnow/code/snowFamilyArchive/watcher"
     ]
   }
 }
