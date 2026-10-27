@@ -1,5 +1,5 @@
 # ---------- Build client ----------
-FROM node:20-alpine AS builder
+FROM node:24.22.1-alpine AS builder
 
 WORKDIR /app
 
@@ -14,13 +14,13 @@ COPY . .
 RUN npm run build
 
 # ---------- Runtime image ----------
-FROM node:20-alpine
+FROM node:24.22.1-alpine
 
 WORKDIR /app
 
 # Copy only what we need for runtime
 COPY package.json package-lock.json ./
-RUN npm ci --only=production
+RUN npm ci --omit=dev
 
 # Copy built client and server code
 COPY --from=builder /app/dist ./dist
