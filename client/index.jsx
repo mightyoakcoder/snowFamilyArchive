@@ -15,6 +15,7 @@ const MultiFileUploader  = lazy(() => import("./components/MultiFileUploader.jsx
 const ImageGallery       = lazy(() => import("./components/ImageGallery.jsx"))
 const AuditLog           = lazy(() => import("./components/AuditLog.jsx"))
 const LandingPage        = lazy(() => import("./components/LandingPage.jsx"))
+const Unauthorized       = lazy(() => import("./components/Unauthorized.jsx"))
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
@@ -84,6 +85,7 @@ function App() {
               <Route path="/admin/audit" element={
                 <AdminRoute><AuditLog /></AdminRoute>
               } />
+              <Route path="/unauthorized" element={<Unauthorized />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </Suspense>

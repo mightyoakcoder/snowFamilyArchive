@@ -719,7 +719,7 @@ function EditModal({ file, corpus, onSave, onClose }) {
 }
 
 // ── Lightbox ──────────────────────────────────────────────────────────────
-function Lightbox({ files, index, onClose, onNav, onEdit, onDelete, canEdit }) {
+function Lightbox({ files, index, onClose, onNav, onEdit, onDelete, canEdit, proxySrc }) {
   const file = files[index];
   const [confirming, setConfirming] = useState(false);
   const [deleting,   setDeleting]   = useState(false);
@@ -938,11 +938,12 @@ export default function ImageGallery({ albumId = null, albumName = null, familyF
   const [lightboxIdx,    setLightboxIdx]     = useState(null);
   const [editingFile,    setEditingFile]     = useState(null);
   const [currentUser,    setCurrentUser]     = useState(undefined);
-  const { token } = useAuth();
+  const { photoSessionReady } = useAuth();
 
   const hasFilters = filterPerson || filterDateFrom || filterDateTo;
   const corpus = buildCorpus(files);
-  const proxySrc = id => token ? `/proxy/${id}?token=${encodeURIComponent(token)}` : `/proxy/${id}`;
+  // Wait for the photo cookie so private thumbnails don't 401 on first load
+  const proxySrc = id => photoSessionReady ? `/proxy/${id}` : undefined;
 
   useEffect(() => {
     import("firebase/auth").then(({ getAuth, onAuthStateChanged }) => {
@@ -1066,6 +1067,7 @@ export default function ImageGallery({ albumId = null, albumName = null, familyF
           onEdit={file => setEditingFile(file)}
           onDelete={deleteFile}
           canEdit={!!currentUser}
+          proxySrc={proxySrc}
         />
       )}
 
