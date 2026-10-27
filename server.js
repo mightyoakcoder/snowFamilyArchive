@@ -391,7 +391,16 @@ app.get("/proxy/:docId", async (req, res) => {
     if (!exists) return res.status(404).send("File not in GCS");
 
     res.setHeader("Content-Type", content_type || "image/jpeg");
-    res.setHeader("Cache-Control", is_private ? "private, no-store" : "public, max-age=3600");
+    if (is_private) {
+      res.setHeader("Cache-Control", "private, no-store");
+    } else {
+      // Revalidate on every view so a photo made private stops loading
+      // immediately; unchanged images come back as a cheap 304
+      const [{ etag }] = await blob.getMetadata();
+      res.setHeader("Cache-Control", "no-cache");
+      res.setHeader("ETag", `"${etag}"`);
+      if (req.headers["if-none-match"] === `"${etag}"`) return res.status(304).end();
+    }
     blob.createReadStream().pipe(res);
   } catch (err) {
     res.status(500).json({ error: err.message });
