@@ -378,7 +378,12 @@ app.get("/proxy/:docId", async (req, res) => {
           authorized = true;
         } catch {}
       }
-      if (!authorized) return res.status(401).send("Unauthorized");
+      if (!authorized) {
+        // Opened directly in the browser → send to the styled 401 page;
+        // <img> requests just get the status code
+        if (req.accepts(["image/*", "html"]) === "html") return res.redirect(302, "/unauthorized");
+        return res.status(401).send("Unauthorized");
+      }
     }
 
     const blob = bucket.file(filename);
