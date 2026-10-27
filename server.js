@@ -333,19 +333,33 @@ function uploadToGCS(buffer, filename, contentType) {
 // Health check
 app.get("/health", (_req, res) => res.json({ status: "healthy" }));
 
-// Proxy image by Firestore doc ID (keeps same URL scheme as Flask app)
+// Proxy image by Firestore doc ID (keeps same URL scheme as Flask app).
+// Rendered via plain <img src> tags, so an Authorization header isn't an
+// option for private photos — the ID token travels as a query param instead.
 app.get("/proxy/:docId", async (req, res) => {
   try {
     const doc = await db.collection(FILES_COL).doc(req.params.docId).get();
     if (!doc.exists) return res.status(404).send("Not found");
 
-    const { filename, content_type } = doc.data();
+    const { filename, content_type, is_private } = doc.data();
+
+    if (is_private) {
+      const header = req.headers.authorization || "";
+      const token  = header.startsWith("Bearer ") ? header.slice(7) : (req.query.token || null);
+      if (!token) return res.status(401).send("Unauthorized");
+      try {
+        await admin.auth().verifyIdToken(token);
+      } catch {
+        return res.status(401).send("Unauthorized");
+      }
+    }
+
     const blob = bucket.file(filename);
     const [exists] = await blob.exists();
     if (!exists) return res.status(404).send("File not in GCS");
 
     res.setHeader("Content-Type", content_type || "image/jpeg");
-    res.setHeader("Cache-Control", "public, max-age=3600");
+    res.setHeader("Cache-Control", is_private ? "private, no-store" : "public, max-age=3600");
     blob.createReadStream().pipe(res);
   } catch (err) {
     res.status(500).json({ error: err.message });

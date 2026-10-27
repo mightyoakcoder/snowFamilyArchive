@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import FamilyCheckboxes from "./FamilyCheckboxes.jsx";
 import api from "../api.js";
+import { useAuth } from "../context/AuthContext.jsx";
 
 const STYLES = `
   @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Barlow:wght@300;400;500;600&display=swap');
@@ -780,7 +781,7 @@ function Lightbox({ files, index, onClose, onNav, onEdit, onDelete, canEdit }) {
             <img
               key={file.id}
               className="gal-lb-img"
-              src={`/proxy/${file.id}`}
+              src={proxySrc(file.id)}
               alt={file.original_filename}
               style={{
                 transform: `translateX(${dragX}px)`,
@@ -937,9 +938,11 @@ export default function ImageGallery({ albumId = null, albumName = null, familyF
   const [lightboxIdx,    setLightboxIdx]     = useState(null);
   const [editingFile,    setEditingFile]     = useState(null);
   const [currentUser,    setCurrentUser]     = useState(undefined);
+  const { token } = useAuth();
 
   const hasFilters = filterPerson || filterDateFrom || filterDateTo;
   const corpus = buildCorpus(files);
+  const proxySrc = id => token ? `/proxy/${id}?token=${encodeURIComponent(token)}` : `/proxy/${id}`;
 
   useEffect(() => {
     import("firebase/auth").then(({ getAuth, onAuthStateChanged }) => {
@@ -1221,7 +1224,7 @@ export default function ImageGallery({ albumId = null, albumName = null, familyF
                   {isImage(file) ? (
                     <img
                       className="gal-card-thumb"
-                      src={`/proxy/${file.id}`}
+                      src={proxySrc(file.id)}
                       alt={file.original_filename}
                       loading="lazy"
                     />
@@ -1264,7 +1267,7 @@ export default function ImageGallery({ albumId = null, albumName = null, familyF
                   {isImage(file) ? (
                     <img
                       className="gal-list-thumb"
-                      src={`/proxy/${file.id}`}
+                      src={proxySrc(file.id)}
                       alt={file.original_filename}
                       loading="lazy"
                     />

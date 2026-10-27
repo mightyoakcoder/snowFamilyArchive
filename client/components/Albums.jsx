@@ -189,7 +189,7 @@ const STYLES = `
 
 export default function Albums() {
   const navigate    = useNavigate();
-  const { user }    = useAuth();
+  const { user, token } = useAuth();
   const queryClient = useQueryClient();
   const VITE_ADMIN_UID = import.meta.env.VITE_ADMIN_UID;
   const isAdmin     = user?.uid !== VITE_ADMIN_UID;
@@ -303,7 +303,7 @@ export default function Albums() {
                   <div className="alb-card-thumb">
                     {album.cover ? (
                       <img
-                        src={`/proxy/${album.cover.id || album.cover.doc_id}`}
+                        src={`/proxy/${album.cover.id || album.cover.doc_id}${token ? `?token=${encodeURIComponent(token)}` : ""}`}
                         alt={album.name}
                         onError={e => { e.currentTarget.style.display = "none"; }}
                       />
