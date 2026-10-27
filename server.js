@@ -234,8 +234,35 @@ app.get("/api/public/files", async (req, res) => {
   }
 });
 
+// ── Photo session cookie ──────────────────────────────────────────────────
+// <img src> can't send an Authorization header, so private photos are
+// authorized by an httpOnly cookie scoped to /proxy. Signing out clears it,
+// and a copied /proxy URL carries no credentials of its own.
+const PHOTO_COOKIE = "photo_session";
+const cookieFlags  = `Path=/proxy; HttpOnly; SameSite=Strict${process.env.NODE_ENV === "production" ? "; Secure" : ""}`;
+
+function readCookie(req, name) {
+  const match = (req.headers.cookie || "").split(";").map(c => c.trim()).find(c => c.startsWith(name + "="));
+  return match ? decodeURIComponent(match.slice(name.length + 1)) : null;
+}
+
+// DELETE /api/session — clear the photo cookie (no auth needed to sign out)
+app.delete("/api/session", (_req, res) => {
+  res.setHeader("Set-Cookie", `${PHOTO_COOKIE}=; ${cookieFlags}; Max-Age=0`);
+  res.status(204).end();
+});
+
 // Apply auth to all /api/ routes
 app.use("/api", requireAuth);
+
+// POST /api/session — set the photo cookie from the verified ID token,
+// expiring with the token itself
+app.post("/api/session", (req, res) => {
+  const token  = req.headers.authorization.slice(7);
+  const maxAge = Math.max(0, req.firebaseUser.exp - Math.floor(Date.now() / 1000));
+  res.setHeader("Set-Cookie", `${PHOTO_COOKIE}=${encodeURIComponent(token)}; ${cookieFlags}; Max-Age=${maxAge}`);
+  res.status(204).end();
+});
 
 // GET /api/families — authenticated version, includes private photos
 app.get("/api/families", async (_req, res) => {
@@ -334,8 +361,7 @@ function uploadToGCS(buffer, filename, contentType) {
 app.get("/health", (_req, res) => res.json({ status: "healthy" }));
 
 // Proxy image by Firestore doc ID (keeps same URL scheme as Flask app).
-// Rendered via plain <img src> tags, so an Authorization header isn't an
-// option for private photos — the ID token travels as a query param instead.
+// Private photos require the photo_session cookie set by POST /api/session.
 app.get("/proxy/:docId", async (req, res) => {
   try {
     const doc = await db.collection(FILES_COL).doc(req.params.docId).get();
@@ -344,14 +370,15 @@ app.get("/proxy/:docId", async (req, res) => {
     const { filename, content_type, is_private } = doc.data();
 
     if (is_private) {
-      const header = req.headers.authorization || "";
-      const token  = header.startsWith("Bearer ") ? header.slice(7) : (req.query.token || null);
-      if (!token) return res.status(401).send("Unauthorized");
-      try {
-        await admin.auth().verifyIdToken(token);
-      } catch {
-        return res.status(401).send("Unauthorized");
+      const token = readCookie(req, PHOTO_COOKIE);
+      let authorized = false;
+      if (token) {
+        try {
+          await admin.auth().verifyIdToken(token);
+          authorized = true;
+        } catch {}
       }
+      if (!authorized) return res.status(401).send("Unauthorized");
     }
 
     const blob = bucket.file(filename);
